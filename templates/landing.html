@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DepthForge | SLCreations, LLC</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            cursor: pointer;
+        }
+        
+        .vintage-font {
+            font-family: 'Cinzel', serif;
+        }
+
+        .pulse-text {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body onclick="window.location.href='/menu'" class="h-screen w-full flex flex-col justify-center items-center text-gray-200">
+
+    <div class="text-center space-y-6 px-4 flex flex-col items-center">
+        
+        <!-- Logo -->
+        <div class="mx-auto w-64 h-64 flex items-center justify-center mb-6">
+            <img src="/static/logo.png" alt="SLCreations Logo" class="max-w-full max-h-full object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]">
+        </div>
+
+        <!-- Title -->
+        <h1 class="text-6xl md:text-8xl font-bold vintage-font tracking-widest text-white drop-shadow-lg">
+            DepthForge
+        </h1>
+        
+        <!-- Subtitle -->
+        <p class="text-xl md:text-2xl text-gray-400 uppercase tracking-widest">
+            3D Relief Assistant
+        </p>
+
+        <!-- Partner Info -->
+        <div class="mt-12 pt-8 border-t border-gray-700 w-3/4 mx-auto">
+            <p class="text-lg">Presented by <span class="vintage-font font-bold text-white">SLCreations, LLC</span></p>
+        </div>
+
+        <!-- Call to Action -->
+        <p class="mt-12 text-sm text-gray-500 pulse-text uppercase tracking-widest mb-4">
+            - Click Anywhere To Begin -
+        </p>
+        
+        <!-- The requested EST. 2026 tag -->
+        <p class="text-xs text-gray-600 vintage-font tracking-widest mt-4">
+            EST. 2026
+        </p>
+
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DepthForge | Class Submission</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #121212; }
+        .vintage-font { font-family: 'Cinzel', serif; }
+        
+        /* Custom styling for the file input to make it look sleek */
+        input[type="file"]::file-selector-button {
+            background-color: #374151;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 15px;
+            transition: background-color 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #4B5563;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-gray-200 flex flex-col items-center py-8 px-4">
+
+    <!-- Header -->
+    <header class="w-full max-w-2xl flex justify-between items-center border-b border-gray-700 pb-4 mb-8">
+        <div class="flex items-center gap-4">
+            <img src="/static/logo.png" alt="Logo" class="w-12 h-12 object-contain drop-shadow-md">
+            <h2 class="text-3xl vintage-font font-bold text-white tracking-wider">Class Drop</h2>
+        </div>
+        <button onclick="window.location.href='/menu'" class="text-sm text-gray-400 hover:text-white transition-colors border border-gray-600 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700">
+            &larr; Back to Menu
+        </button>
+    </header>
+
+    <!-- Main Form Area -->
+    <main class="w-full max-w-2xl">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-8 shadow-2xl relative overflow-hidden">
+            
+            <div class="mb-8 border-b border-gray-700 pb-6">
+                <h3 class="text-2xl font-bold text-white mb-2">Submit Your Design</h3>
+                <p class="text-gray-400 text-sm">Drop your finalized depth map or vector file here. SLCreations will process your file for the OmTech laser queue.</p>
+            </div>
+
+            <form id="submissionForm" onsubmit="submitFile(event)" class="space-y-6">
+                
+                <!-- Name & Email Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-300 mb-2">Full Name *</label>
+                        <input type="text" id="studentName" required class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-gray-400 transition-colors" placeholder="John Doe">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-300 mb-2">Email Address *</label>
+                        <input type="email" id="studentEmail" required class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-gray-400 transition-colors" placeholder="john@example.com">
+                        <p class="text-[10px] text-gray-500 mt-2 italic">* Disclaimer: Your email is used solely for returning files and workshop communications. We promise to never spam you.</p>
+                    </div>
+                </div>
+
+                <!-- File Upload -->
+                <div class="bg-gray-900 border border-dashed border-gray-600 rounded-lg p-6 text-center">
+                    <label class="block text-sm font-semibold text-gray-300 mb-4">Upload Laser File</label>
+                    <input type="file" id="studentFile" required accept=".png,.jpg,.jpeg,.svg,.ai,.pdf" class="w-full text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600 transition-colors">
+                    <p class="text-xs text-gray-500 mt-4">Accepted formats: PNG, JPG, SVG, AI, PDF (Max 15MB)</p>
+                </div>
+
+                <!-- Premium Lead Generation Checkbox -->
+                <div class="flex items-start gap-3 bg-gray-900 p-4 rounded-lg border border-gray-700">
+                    <div class="flex items-center h-5">
+                        <input id="premiumInterest" type="checkbox" class="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2 accent-blue-600 cursor-pointer">
+                    </div>
+                    <div class="text-sm">
+                        <label for="premiumInterest" class="font-medium text-white cursor-pointer">Yes, I'm interested in the Premium DepthForge Generator!</label>
+                        <p class="text-gray-400 mt-1">Check this box if you'd like info on accessing our AI generator for your own personal projects outside of class.</p>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="submitBtn" class="w-full bg-gray-200 text-gray-900 font-bold py-4 rounded-lg hover:bg-white transition-colors uppercase tracking-wider text-sm shadow-lg mt-4">
+                    Submit To Laser Queue
+                </button>
+            </form>
+
+            <!-- Success Overlay (Hidden by default) -->
+            <div id="successMessage" class="hidden absolute inset-0 bg-gray-800 flex flex-col justify-center items-center text-center p-8 z-10">
+                <div class="w-20 h-20 bg-green-900 rounded-full flex items-center justify-center mb-6 shadow-lg border border-green-500">
+                    <svg class="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h3 class="text-3xl vintage-font font-bold text-white mb-2">File Received!</h3>
+                <p class="text-gray-400 text-lg">Your artwork is officially in the queue for the OmTech laser. See you at the machine!</p>
+                <button onclick="window.location.reload()" class="mt-8 text-sm text-gray-400 hover:text-white underline">Submit another file</button>
+            </div>
+            
+            <!-- Loading State -->
+            <div id="loadingState" class="hidden absolute inset-0 bg-gray-800 bg-opacity-90 flex flex-col justify-center items-center z-10">
+                <svg class="animate-spin h-10 w-10 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="text-white uppercase tracking-widest text-sm animate-pulse">Uploading to Studio...</p>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        async function submitFile(event) {
+            event.preventDefault(); // Stop normal form submission
+
+            const name = document.getElementById('studentName').value;
+            const email = document.getElementById('studentEmail').value;
+            const fileInput = document.getElementById('studentFile');
+            const premiumInterest = document.getElementById('premiumInterest').checked;
+
+            if (fileInput.files.length === 0) {
+                alert("Mate, you forgot to attach your file!");
+                return;
+            }
+
+            // Show Loading
+            document.getElementById('loadingState').classList.remove('hidden');
+
+            // Package it all up in a FormData object (required for file uploads)
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('email', email);
+            formData.append('premium_interest', premiumInterest);
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/api/submit', {
+                    method: 'POST',
+                    body: formData // Notice we don't set Content-Type, the browser handles it automatically for FormData
+                });
+                
+                const data = await response.json();
+
+                if (response.ok && data.status === "success") {
+                    // Show success screen
+                    document.getElementById('loadingState').classList.add('hidden');
+                    document.getElementById('submissionForm').classList.add('hidden');
+                    document.getElementById('successMessage').classList.remove('hidden');
+                } else {
+                    throw new Error(data.error || "Upload failed.");
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert("Upload Error: " + error.message);
+                document.getElementById('loadingState').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
