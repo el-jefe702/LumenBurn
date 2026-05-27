@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 import traceback
+import subprocess
 from fastapi import FastAPI, Request, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,7 +10,11 @@ from fastapi.templating import Jinja2Templates
 import uvicorn
 from dotenv import load_dotenv
 
-# Import the new Google GenAI SDK exclusively
+# OpenCV for local image processing
+import cv2
+import numpy as np
+
+# Import the Google GenAI SDK exclusively
 from google import genai
 from google.genai import types
 
@@ -37,6 +42,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # --- PROMPT ARCHITECTURE ---
+
 def build_improve_prompt(user_idea: str) -> str:
     return (
         f"Act as a master CNC relief artist. User Idea: {user_idea} "
@@ -55,6 +61,44 @@ def build_final_prompt(improved_prompt: str) -> str:
         "FORBIDDEN: ABSOLUTELY NO topographic lines, NO contour lines, NO terracing, NO stepped plateaus, NO harsh outlines, NO banding, NO posterization. "
         "OUTPUT: A perfectly smooth, seamless 16-bit depth map optimized for 3D CNC laser engraving."
     )
+
+# --- IMAGE PROCESSING ---
+
+def local_smooth_depth_map(input_path: str, output_path: str, d=9, sig_c=75, sig_s=75, blur_k=5):
+    """
+    Locally processes a depth map using OpenCV to remove AI noise 
+    and smooth gradients for CNC/Laser engraving.
+    """
+    # IMREAD_ANYDEPTH ensures we don't accidentally downgrade a 16-bit image to 8-bit.
+    img = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE | cv2.IMREAD_ANYDEPTH)
+    
+    if img is None:
+        raise ValueError(f"Could not load image at {input_path}")
+
+    # Convert to float32 so the math operations don't clip our data
+    img_float = np.float32(img)
+
+    # Apply Bilateral Filter to smooth flat gradients while keeping sharp edges crisp.
+    smoothed = cv2.bilateralFilter(img_float, d, sig_c, sig_s)
+
+    # Apply a very light Gaussian blur on top to kill any lingering micro-stepping
+    if blur_k > 1:
+        if blur_k % 2 == 0: 
+            blur_k += 1 # Ensure odd number for OpenCV
+        smoothed = cv2.GaussianBlur(smoothed, (blur_k, blur_k), 0)
+
+    # Convert back to the original format safely
+    if img.dtype == np.uint16:
+        smoothed = np.clip(smoothed, 0, 65535).astype(np.uint16)
+    else:
+        smoothed = np.clip(smoothed, 0, 255).astype(np.uint8)
+
+    # Save the final processed image
+    success = cv2.imwrite(output_path, smoothed)
+    if not success:
+        raise IOError(f"Failed to save processed image to {output_path}")
+
+# --- ROUTES ---
 
 @app.get("/", response_class=HTMLResponse)
 async def read_landing(request: Request):
@@ -88,7 +132,7 @@ async def generate_depth_map(request: Request):
         if not student_prompt:
             return JSONResponse(status_code=400, content={"error": "Prompt cannot be empty."})
 
-        # Step 1: Improve prompt (Using Gemini 2.5)
+        # Step 1: Improve prompt
         try:
             improve_response = client.models.generate_content(
                 model='gemini-2.5-flash',
@@ -101,7 +145,7 @@ async def generate_depth_map(request: Request):
             print(f"[2] Warning: Prompt Improver failed ({text_err}). Using original.")
             improved_prompt = student_prompt
 
-        # Step 2: Generate image (Using Imagen 4.0)
+        # Step 2: Generate image
         final_prompt = build_final_prompt(improved_prompt)
         image_result = client.models.generate_images(
             model='imagen-4.0-generate-001',
@@ -109,18 +153,58 @@ async def generate_depth_map(request: Request):
             config=types.GenerateImagesConfig(number_of_images=1, output_mime_type="image/png", aspectRatio="1:1")
         )
 
-        # Step 3: Save
+        # Step 3: Save the raw generated image
         generated_image = image_result.generated_images[0]
         filename = f"{uuid.uuid4().hex[:10]}.png"
         filepath = os.path.join("static", "generated", filename)
         with open(filepath, "wb") as f:
             f.write(generated_image.image.image_bytes)
 
-        return JSONResponse(content={"status": "success", "image_url": f"/static/generated/{filename}"})
-
-    except Exception:
+        # Step 4: Return the raw generated image and provide the postprocess endpoint
+        postprocess_hint = "/api/postprocess"
+        return JSONResponse(content={
+            "status": "success",
+            "image_url": f"/static/generated/{filename}",
+            "postprocess_endpoint": postprocess_hint
+        })
+        
+    except Exception as e:
         traceback.print_exc()
-        return JSONResponse(status_code=500, content={"error": "Forge Engine Error"})
+        return JSONResponse(status_code=500, content={"error": f"Generation Engine Error: {str(e)}"})
+
+@app.post("/api/postprocess")
+async def postprocess_image(request: Request):
+    """Handles the frontend request to polish the generated depth map locally."""
+    try:
+        data = await request.json()
+        image_path = data.get("image_path") or data.get("filename") or data.get("image_url")
+        if not image_path:
+            return JSONResponse(status_code=400, content={"error": "image_path/filename/image_url required."})
+
+        # Normalize to a relative filename
+        if image_path.startswith("/static/"):
+            image_rel = image_path.split("/static/")[-1]
+        else:
+            image_rel = os.path.basename(image_path)
+
+        input_filepath = os.path.join("static", "generated", image_rel)
+        if not os.path.exists(input_filepath):
+            return JSONResponse(status_code=404, content={"error": "file not found."})
+
+        postprocessed_filename = f"forge_{image_rel}"
+        postprocessed_filepath = os.path.join("static", "generated", postprocessed_filename)
+
+        # Run our local smoothing function
+        try:
+            local_smooth_depth_map(input_filepath, postprocessed_filepath)
+            return JSONResponse(content={"status": "success", "image_url": f"/static/generated/{postprocessed_filename}"})
+        except Exception as process_err:
+            print(f"OpenCV Error: {process_err}")
+            return JSONResponse(status_code=500, content={"error": f"Image processing failed: {str(process_err)}"})
+
+    except Exception as e:
+        print(f"Postprocess Route Error: {e}")
+        return JSONResponse(status_code=500, content={"error": "Postprocess Engine Error"})
 
 @app.post("/api/chat")
 async def chat_endpoint(request: Request):
@@ -141,7 +225,6 @@ async def chat_endpoint(request: Request):
             f"User asks: {user_message}"
         )
 
-        # Chat model updated to Gemini 2.5
         chat_response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=system_context,
@@ -163,21 +246,14 @@ async def handle_submission(
 ):
     """Handles the student file drop and saves their lead info with their name as the file name."""
     try:
-        # Get the file extension (e.g., png, jpg, ai)
         file_ext = file.filename.split(".")[-1]
-        
-        # Scrub the student's name of any weird characters so Windows doesn't freak out
         clean_name = "".join(c for c in name if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
-        
-        # Create a file name like: "Jeff_Smith_a1b2.png" 
-        # (The short random code at the end prevents overwriting if they upload a second time)
         safe_filename = f"{clean_name}_{uuid.uuid4().hex[:4]}.{file_ext}"
         filepath = os.path.join("static", "uploads", safe_filename)
         
         with open(filepath, "wb") as f:
             f.write(await file.read())
             
-        # Log the student info to your JSON database file
         student_data = {
             "name": name,
             "email": email,
@@ -203,4 +279,4 @@ async def handle_submission(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

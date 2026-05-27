@@ -5,48 +5,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DepthForge | Support AI</title>
     <link rel="icon" type="image/png" href="/static/favicon.png">
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #121212; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            color: #e5e7eb;
+            margin: 0;
+            padding: 16px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
         .vintage-font { font-family: 'Cinzel', serif; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1a1a1a; }
-        ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+
+        /* Match the Header from the Generator Page */
+        .app-header {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+        }
+
+        /* Main Container */
+        .chat-wrapper {
+            width: 100%;
+            max-width: 600px;
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Message List - Let it grow naturally */
+        #chatBox {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 300px;
+        }
+
+        .msg {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .ai-msg { background-color: #374151; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .user-msg { background-color: #2563eb; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+
+        /* Input Area */
+        .input-area {
+            background-color: #111827;
+            border-top: 1px solid #374151;
+            padding: 16px;
+            display: flex;
+            gap: 10px;
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            background-color: #1f2937;
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .send-btn {
+            background-color: #e5e7eb;
+            color: #111827;
+            font-weight: 800;
+            padding: 0 20px;
+            border-radius: 8px;
+            border: none;
+            text-transform: uppercase;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .back-btn {
+            background: #1f2937;
+            color: #9ca3af;
+            border: 1px solid #4b5563;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-decoration: none;
+        }
     </style>
 </head>
-<body class="h-screen text-gray-200 flex flex-col items-center py-8 px-4">
+<body>
 
     <!-- Header -->
-    <header class="w-full max-w-3xl flex justify-between items-center border-b border-gray-700 pb-4 mb-6 shrink-0">
-        <div class="flex items-center gap-4">
-            <img src="/static/logo.png" alt="Logo" class="w-12 h-12 object-contain drop-shadow-md">
-            <h2 class="text-3xl vintage-font font-bold text-white tracking-wider">Support AI</h2>
+    <header class="app-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="/static/logo.png" alt="Logo" style="width: 32px; height: 32px; object-fit: contain;">
+            <h2 class="vintage-font" style="margin: 0; font-size: 1.2rem; color: white;">Support AI</h2>
         </div>
-        <button onclick="window.location.href='/menu'" class="text-sm text-gray-400 hover:text-white transition-colors border border-gray-600 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700">
-            &larr; Back to Menu
-        </button>
+        <a href="/menu" class="back-btn">&larr; Menu</a>
     </header>
 
-    <!-- Chat Box -->
-    <div class="w-full max-w-3xl flex-grow bg-gray-800 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-2xl">
+    <!-- Main Chat Container -->
+    <div class="chat-wrapper">
         
-        <!-- Messages Area -->
-        <div id="chatBox" class="flex-grow p-6 overflow-y-auto space-y-4">
-            <!-- AI Welcome Message -->
-            <div class="flex justify-start">
-                <div class="bg-gray-700 text-gray-200 p-4 rounded-2xl rounded-tl-none max-w-[80%] shadow">
-                    <p class="text-sm">Hello! I'm the SLCreations AI assistant. How can I help you with your CNC laser projects or the DepthForge app today?</p>
-                </div>
+        <div id="chatBox">
+            <div class="msg ai-msg">
+                Hello! I'm the SLCreations assistant. How can I help you today?
             </div>
         </div>
 
-        <!-- Input Area -->
-        <div class="p-4 bg-gray-900 border-t border-gray-700 flex gap-4 items-center">
-            <input type="text" id="userInput" placeholder="Ask a question..." class="flex-grow bg-gray-800 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-gray-400" onkeypress="if(event.key === 'Enter') sendMessage()">
-            <button onclick="sendMessage()" class="bg-gray-200 text-gray-900 font-bold px-6 py-3 rounded-lg hover:bg-white transition-colors uppercase tracking-wider text-sm">
-                Send
-            </button>
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Ask a question..." autocomplete="off" onkeypress="if(event.key === 'Enter') sendMessage()">
+            <button onclick="sendMessage()" class="send-btn">Send</button>
         </div>
     </div>
 
@@ -58,30 +146,25 @@
 
             const chatBox = document.getElementById('chatBox');
 
-            // Add User Message to UI
-            chatBox.innerHTML += `
-                <div class="flex justify-end">
-                    <div class="bg-blue-600 text-white p-4 rounded-2xl rounded-tr-none max-w-[80%] shadow">
-                        <p class="text-sm">${message}</p>
-                    </div>
-                </div>
-            `;
-            inputField.value = '';
-            chatBox.scrollTop = chatBox.scrollHeight;
+            // Add User Message
+            const userDiv = document.createElement('div');
+            userDiv.className = 'msg user-msg';
+            userDiv.textContent = message;
+            chatBox.appendChild(userDiv);
 
-            // Add Loading Indicator
+            inputField.value = '';
+            window.scrollTo(0, document.body.scrollHeight);
+
+            // Add Loading
             const loadingId = 'loading-' + Date.now();
-            chatBox.innerHTML += `
-                <div id="${loadingId}" class="flex justify-start">
-                    <div class="bg-gray-700 text-gray-400 p-4 rounded-2xl rounded-tl-none text-sm animate-pulse">
-                        Thinking...
-                    </div>
-                </div>
-            `;
-            chatBox.scrollTop = chatBox.scrollHeight;
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = loadingId;
+            loadingDiv.className = 'msg ai-msg';
+            loadingDiv.style.opacity = '0.5';
+            loadingDiv.textContent = 'Thinking...';
+            chatBox.appendChild(loadingDiv);
 
             try {
-                // Send to our backend
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -89,31 +172,22 @@
                 });
 
                 const data = await response.json();
-                document.getElementById(loadingId).remove();
+                const loader = document.getElementById(loadingId);
+                if(loader) loader.remove();
 
                 if (response.ok) {
-                    // Add AI Response to UI
-                    chatBox.innerHTML += `
-                        <div class="flex justify-start">
-                            <div class="bg-gray-700 text-gray-200 p-4 rounded-2xl rounded-tl-none max-w-[80%] shadow">
-                                <p class="text-sm whitespace-pre-wrap">${data.reply}</p>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    throw new Error(data.error || "Server failed to respond.");
+                    const aiDiv = document.createElement('div');
+                    aiDiv.className = 'msg ai-msg';
+                    aiDiv.style.whiteSpace = 'pre-wrap';
+                    aiDiv.textContent = data.reply;
+                    chatBox.appendChild(aiDiv);
                 }
             } catch (error) {
-                document.getElementById(loadingId).remove();
-                chatBox.innerHTML += `
-                    <div class="flex justify-start">
-                        <div class="bg-red-900 text-white p-4 rounded-2xl rounded-tl-none max-w-[80%] shadow">
-                            <p class="text-sm">System Error: ${error.message}</p>
-                        </div>
-                    </div>
-                `;
+                const loader = document.getElementById(loadingId);
+                if(loader) loader.remove();
+                console.error(error);
             }
-            chatBox.scrollTop = chatBox.scrollHeight;
+            window.scrollTo(0, document.body.scrollHeight);
         }
     </script>
 </body>
