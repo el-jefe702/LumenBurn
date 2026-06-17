@@ -1,11 +1,11 @@
 <div align="center">
   <img src="static/logo.png" alt="DepthForge Logo" width="150" />
   <h1>DepthForge</h1>
-  <p><em>A mixed web and mobile workspace for depth-map generation and laser workflow prototyping.</em></p>
+  <p><em>A mixed web and mobile workspace for depth-map generation and CNC laser workflow.</em></p>
 
   <img src="https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
-  <img src="https://img.shields.io/badge/Status-Prototyping-FF8C00?style=for-the-badge" alt="Status" />
+  <img src="https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge" alt="Status" />
 </div>
 
 <hr />
@@ -17,7 +17,7 @@ The main runtime is a **Node.js + Express** server that:
 🎨 Renders the beautifully styled web UI from `templates/`  
 🧠 Generates depth-map images utilizing **Google Gemini / Imagen**  
 ⚙️ Post-processes images with custom **Python** helpers  
-🚀 Exposes a mock laser job workflow over HTTP and WebSocket  
+🚀 Generates native **LightBurn (.lbrn2)** project files for direct CNC laser integration  
 📁 Serves generated files and assets from `static/`  
 
 *The repo also includes an Android Studio WebView scaffold and a Blender helper folder for future device and post-processing work.*
@@ -45,7 +45,7 @@ The main runtime is a **Node.js + Express** server that:
  ┣ 📂 static/           # Uploaded and generated assets (images, STLs, etc.)
  ┣ 📂 android_app/      # Android WebView scaffold mirroring the local server
  ┣ 📂 blender_plugin/   # Blender-side helper code and notes
- ┗ 📂 lib/              # LightBurn file generator and mock machine controllers
+ ┗ 📂 lib/              # LightBurn file generator tools
 ```
 
 ---
@@ -107,18 +107,14 @@ npm start
 | `GET` | `/help` | ❓ Help and support page |
 | `GET` | `/submit` | 📤 User submission page |
 | `GET` | `/admin` | 🛡️ Admin dashboard |
-| `GET` | `/api/admin/queue` | 🗃️ Fetches current laser queue jobs |
+| `GET` | `/api/admin/queue` | 🗃️ Fetches the list of submitted LightBurn files |
 | `GET` | `/api/admin/leads` | 📈 Fetches current login sign-up leads |
 | `POST` | `/api/generate` | ✨ Improves a text prompt & generates an image |
 | `POST` | `/api/postprocess`| 🧽 Smooths a generated image via Python |
 | `POST` | `/api/preview3d` | 🧊 Creates a placeholder 3D preview artifact |
-| `POST` | `/api/laser/prepare`| 🔍 Validates an image and creates a mock laser job |
-| `POST` | `/api/laser/launch` | 🚀 Launches the mock laser workflow (requires safety check) |
-| `GET` | `/api/laser/status/:jobId`| ⏳ Checks the current state of a job |
+| `POST` | `/api/laser/lightburn`| 🎯 Generates a LightBurn `.lbrn2` project file from a depth map |
 | `POST` | `/api/chat` | 💬 Gemini-backed assistant chat endpoint |
 | `POST` | `/api/submit` | 📂 Uploads a file into `static/uploads/` |
-
-> *WebSocket clients receive real-time job updates from the same server instance.*
 
 ---
 
@@ -152,11 +148,10 @@ python tune_depth.py path\to\image.png
 
 ## 📝 Audit & Dev Notes
 
-- ⚠️ **Machine Connection:** The laser workflow is currently mocked in `lib/ruida_mock.js`; it is not connected to a real machine yet.
-- ⚙️ **Compiler Needs:** True machine communication will require integrating a compiler to convert PNG depth maps into `.rd` files and activating the UDP client located in `lib/ruida_udp.js`.
+- 🎯 **LightBurn Integration:** Laser integration is handled elegantly via downloadable `.lbrn2` LightBurn project files instead of direct machine compilation. 
+- 🛡️ **Admin Tools:** The Admin dashboard allows tracking leads and managing the queue of LightBurn files submitted by students. Files can be opened directly into LightBurn from the browser!
 - 🧊 **Mesh Generation:** `processor.py` provides smoothing, but 3D mesh generation is currently a placeholder implementation.
-- 🗑️ **STL Export:** STL export functionality has been removed from the application.
-- 🛡️ **Admin Tools:** The Admin dashboard allows tracking leads and pending laser queue items effortlessly.
+- 🗑️ **STL Export:** STL export functionality has been formally removed from the application as the focus shifted fully to the LightBurn laser workflow.
 
 ---
 
