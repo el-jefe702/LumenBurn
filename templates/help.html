@@ -164,11 +164,18 @@
             loadingDiv.textContent = 'Thinking...';
             chatBox.appendChild(loadingDiv);
 
+            // Handle Session ID
+            let sessionId = localStorage.getItem('chatSessionId');
+            if (!sessionId) {
+                sessionId = 'sess-' + Date.now();
+                localStorage.setItem('chatSessionId', sessionId);
+            }
+
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
+                    body: JSON.stringify({ message: message, sessionId: sessionId })
                 });
 
                 const data = await response.json();

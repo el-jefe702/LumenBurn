@@ -1,0 +1,1 @@
+﻿import { GoogleGenAI } from '@google/genai'; const ai = new GoogleGenAI({}); const chat = ai.chats.create({model: 'gemini-2.5-flash', config: {systemInstruction: 'You must answer like a pirate.'}}); chat.sendMessage({message: 'hi'}).then(r => console.log(r.text)).catch(e => console.error(e));

@@ -360,8 +360,8 @@ class Draw3DTaskThread(threading.Thread):
                 self.result_queue.put(("ERROR", "Failed to submit 3D drawing task"))
                 return
 
-            # Save task ID
-            self.context.scene.sculptok_task_id = prompt_id
+            # Pass task ID back to main thread safely
+            self.operator._task_id = prompt_id
 
             # 5. Poll for results
             result = None
@@ -398,10 +398,10 @@ class Draw3DTaskThread(threading.Thread):
                 if position > 0:
                     self.operator._position = position
                     self.operator._progress = 0
-                    self.operator.report({'INFO'}, f"{position} tasks ahead, estimated time: {position * 30} seconds")
+                    self.operator._message = f"{position} tasks ahead, estimated time: {position * 30} seconds"
                 else:
                     self.operator._progress = 0
-                    self.operator.report({'INFO'}, "Server is generating 3D model, estimated time: 30-60 seconds")
+                    self.operator._message = "Server is generating 3D model, estimated time: 30-60 seconds"
                 
                 time.sleep(10)
 
@@ -472,8 +472,8 @@ class DrawTaskThread(threading.Thread):
                 self.result_queue.put(("ERROR", "Failed to submit drawing task"))
                 return
 
-            # Save task ID to context.scene
-            self.context.scene.sculptok_task_id = prompt_id
+            # Pass task ID back to main thread safely
+            self.operator._task_id = prompt_id
 
             # 5. Poll for results
             result = None
@@ -490,10 +490,10 @@ class DrawTaskThread(threading.Thread):
                 if position > 0:
                     self.operator._position = position
                     self.operator._progress = 0
-                    self.operator.report({'INFO'}, f"{position} tasks ahead, estimated time: {position * 20} seconds")
+                    self.operator._message = f"{position} tasks ahead, estimated time: {position * 20} seconds"
                 else:
                     self.operator._progress = 0
-                    self.operator.report({'INFO'}, "Server is generating, estimated time: 20-40 seconds")
+                    self.operator._message = "Server is generating, estimated time: 20-40 seconds"
                 
                 time.sleep(10)
 
@@ -591,7 +591,8 @@ class sculptok_OT_LocalUploadAndDraw(Operator):
                     status, data = self._thread.result_queue.get()
                     
                     if status == "SUCCESS":
-                        context.scene.sculptok_points = data["points"]
+                        if data.get("points") is not None:
+                            context.scene.sculptok_points = data["points"]
                         context.scene.sculptok_img_count = data["img_count"]
                         self.report({'INFO'}, 
                             f"Drawing complete! {data['img_count']} images saved\n"
@@ -606,6 +607,13 @@ class sculptok_OT_LocalUploadAndDraw(Operator):
                     context.window_manager.event_timer_remove(self._timer)
                     return {'FINISHED'}
                     
+            if hasattr(self, '_task_id') and self._task_id:
+                context.scene.sculptok_task_id = self._task_id
+                self._task_id = None
+            if hasattr(self, '_message') and self._message:
+                self.report({'INFO'}, self._message)
+                self._message = None
+
             # Update UI to show progress
             context.scene.sculptok_progress = self._progress
             context.scene.sculptok_position = self._position
@@ -654,7 +662,8 @@ class sculptok_OT_LocalUploadAndDraw3D(Operator):
                     status, data = self._thread.result_queue.get()
                     
                     if status == "SUCCESS":
-                        context.scene.sculptok_points = data["points"]
+                        if data.get("points") is not None:
+                            context.scene.sculptok_points = data["points"]
                         self.report({'INFO'}, 
                             f"3D Generation complete! Model saved to {data['model_path']}\n"
                             f"Current points: {data['points'] if data['points'] is not None else 'Unknown'}"
@@ -668,6 +677,13 @@ class sculptok_OT_LocalUploadAndDraw3D(Operator):
                     context.window_manager.event_timer_remove(self._timer)
                     return {'FINISHED'}
                     
+            if hasattr(self, '_task_id') and self._task_id:
+                context.scene.sculptok_task_id = self._task_id
+                self._task_id = None
+            if hasattr(self, '_message') and self._message:
+                self.report({'INFO'}, self._message)
+                self._message = None
+
             context.scene.sculptok_progress = self._progress
             context.scene.sculptok_position = self._position
             context.area.tag_redraw()

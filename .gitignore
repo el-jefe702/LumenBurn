@@ -1,0 +1,33 @@
+# Node
+node_modules/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Android
+android_app/.gradle/
+android_app/build/
+android_app/app/build/
+android_app/local.properties
+
+# App Data & Generations
+static/generated/
+static/uploads/
+data/
+
+# OS Files
+.DS_Store
+Thumbs.db
+# IDEs & Profiling
+.vs/
+.vscode/
+.openmcp/
+*.hprof
+*.slnx.sqlite
+*.vsidx
+.idea/
+

@@ -29,7 +29,7 @@ def run_tuner(image_path):
     cv2.createTrackbar("Neighborhood (d)", window_name, 9, 30, no_op)
     cv2.createTrackbar("Sigma Color", window_name, 75, 200, no_op)
     cv2.createTrackbar("Sigma Space", window_name, 75, 200, no_op)
-    cv2.createTrackbar("Blur Kernal", window_name, 5, 15, no_op) # Gaussian blur at the end
+    cv2.createTrackbar("Blur Kernel", window_name, 5, 15, no_op) # Gaussian blur at the end
 
     print("Live tuner running. Adjust sliders. Press 's' to save the result, or 'ESC' to close.")
 
@@ -38,7 +38,7 @@ def run_tuner(image_path):
         d = cv2.getTrackbarPos("Neighborhood (d)", window_name)
         sig_c = cv2.getTrackbarPos("Sigma Color", window_name)
         sig_s = cv2.getTrackbarPos("Sigma Space", window_name)
-        blur_k = cv2.getTrackbarPos("Blur Kernal", window_name)
+        blur_k = cv2.getTrackbarPos("Blur Kernel", window_name)
 
         # OpenCV requires the blur kernel size to be an odd number
         if blur_k % 2 == 0:

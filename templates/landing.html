@@ -12,7 +12,6 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #121212;
-            cursor: pointer;
         }
         
         .vintage-font {
@@ -27,11 +26,17 @@
             0%, 100% { opacity: 1; }
             50% { opacity: .5; }
         }
+        
+        /* Modal background blur */
+        .modal-bg {
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+        }
     </style>
 </head>
-<body onclick="window.location.href='/menu'" class="h-screen w-full flex flex-col justify-center items-center text-gray-200">
+<body class="h-screen w-full flex flex-col justify-center items-center text-gray-200">
 
-    <div class="text-center space-y-6 px-4 flex flex-col items-center">
+    <div id="mainContent" class="text-center space-y-6 px-4 flex flex-col items-center cursor-pointer w-full h-full justify-center" onclick="openModal()">
         
         <!-- Logo -->
         <div class="mx-auto w-40 h-40 flex items-center justify-center mb-4">
@@ -57,13 +62,102 @@
         <p class="mt-12 text-sm text-gray-500 pulse-text uppercase tracking-widest mb-4">
             - Click Anywhere To Begin -
         </p>
-        
-        <!-- The requested EST. 2023 tag -->
-        <p class="text-xs text-gray-600 vintage-font tracking-widest mt-4">
-            EST. 2023
-        </p>
-
     </div>
 
+    <!-- Modal Form (Hidden by default) -->
+    <div id="leadModal" class="hidden fixed inset-0 modal-bg z-50 flex flex-col justify-center items-center px-4" onclick="closeModal()">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-8 shadow-2xl w-full max-w-md relative" onclick="event.stopPropagation()">
+            
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div class="mb-6 text-center">
+                <h3 class="text-2xl vintage-font font-bold text-white mb-2">Join Our Community</h3>
+                <p class="text-gray-400 text-sm">Please add yourself to our mailing list to continue.</p>
+            </div>
+
+            <form id="leadForm" onsubmit="submitLead(event)" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Full Name *</label>
+                    <input type="text" id="userName" required class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-gray-400 transition-colors" placeholder="Your Name">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Email Address *</label>
+                    <input type="email" id="userEmail" required class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-gray-400 transition-colors" placeholder="email@example.com">
+                    <p class="text-[10px] text-gray-500 mt-2 italic">* Disclaimer: We promise to never sell your info or spam you.</p>
+                </div>
+
+                <div class="flex items-start gap-3 bg-gray-900 p-4 rounded-lg border border-gray-700">
+                    <div class="flex items-center h-5">
+                        <input id="premiumInterest" type="checkbox" class="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2 accent-blue-600 cursor-pointer">
+                    </div>
+                    <div class="text-sm">
+                        <label for="premiumInterest" class="font-medium text-white cursor-pointer">Interested in the Pro Version?</label>
+                        <p class="text-gray-400 mt-1">Check here for info on using DepthForge for personal projects outside of class.</p>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                    <a href="/menu" class="w-full sm:w-auto text-center bg-transparent border border-gray-600 text-gray-400 font-bold py-3 px-6 rounded-lg hover:bg-gray-700 hover:text-white transition-colors text-sm">
+                        Skip
+                    </a>
+                    <button type="submit" id="submitBtn" class="w-full sm:w-auto flex-grow bg-gray-200 text-gray-900 font-bold py-3 px-6 rounded-lg hover:bg-white transition-colors uppercase tracking-wider text-sm shadow-lg">
+                        Enter DepthForge
+                    </button>
+                </div>
+            </form>
+            
+            <div id="loadingState" class="hidden absolute inset-0 bg-gray-800 bg-opacity-90 flex flex-col justify-center items-center rounded-xl z-10">
+                <svg class="animate-spin h-8 w-8 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openModal() {
+            document.getElementById('leadModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('leadModal').classList.add('hidden');
+        }
+
+        async function submitLead(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('userName').value;
+            const email = document.getElementById('userEmail').value;
+            const premiumInterest = document.getElementById('premiumInterest').checked;
+            
+            document.getElementById('loadingState').classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/api/lead', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, email, premium_interest: premiumInterest })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === "success") {
+                    window.location.href = '/menu';
+                } else {
+                    throw new Error(data.error || "Submission failed.");
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert("Error: " + error.message);
+                document.getElementById('loadingState').classList.add('hidden');
+            }
+        }
+    </script>
 </body>
 </html>
