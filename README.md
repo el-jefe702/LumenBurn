@@ -12,15 +12,14 @@
 
 ## 🌟 Overview
 
-The main runtime is a **Node.js + Express** server that:
+The main runtime operates as a local **Node.js + Express Edge Server** that coordinates a hybrid cloud-and-hardware workflow:
 
-🎨 Renders the beautifully styled web UI from `templates/`  
-🧠 Generates depth-map images utilizing **Google Gemini / Imagen**  
-⚙️ Post-processes images with custom **Python** helpers  
-🚀 Generates native **LightBurn (.lbrn2)** project files for direct CNC laser integration  
-📁 Serves generated files and assets from `static/`  
+* **Cloud AI Generation (Gemini & Imagen):** Offloads prompt expansion and initial 3D height-map generation to centralized cloud APIs.
+* **Local Edge Processing (OpenCV & Python):** Runs bilateral filtering, inpainting, and normalization locally near the hardware to remove stair-stepping artifacts.
+* **CNC Laser Toolpathing:** Generates native **LightBurn (.lbrn2)** project files for direct CNC laser integration.
+* **Local Web UI & API Hub:** Renders the web interface and exposes API endpoints for student submission queues and hardware controls.
 
-*The repo also includes an Android Studio WebView scaffold and a Blender helper folder for future device and post-processing work.*
+*The repo also includes a native Android Jetpack Compose application and a Blender helper folder for future device and post-processing work.*
 
 ## 📋 Table of Contents
 - [Repository Layout](#-repository-layout)
@@ -134,15 +133,15 @@ python tune_depth.py path\to\image.png
 
 ## 📱 Android App
 
-`android_app/` is an Android application that perfectly mirrors the web UI using a **WebView wrapper**. It expects the local server at `http://10.0.2.2:8000` when running on the Android emulator.
+`android_app/` is a native Android application built using **Kotlin & Jetpack Compose**. It perfectly mirrors the features and functions of the web UI (Mailing list landing modal, The Forge with full post-processing pipeline visualization, Support AI chat assistant, and the Admin Queue/Leads dashboard) and supports a direct laser launch workflow with live WebSocket status monitoring.
 
 **Typical Workflow:**
 1. Open `android_app/` in Android Studio.
 2. Sync Gradle.
 3. Run the `app` module on an emulator or physical device.
 
-> **Running on a Physical Device:**
-> Update `WebViewScreen("http://10.0.2.2:8000/")` in `android_app/app/src/main/kotlin/com/depthforge/app/MainActivity.kt` to match your machine's LAN IP address.
+> **Server Configuration & Connection:**
+> By default, the app expects the backend server at `http://10.0.2.2:8000` when running in the Android emulator. If you are running on a physical device, tap the **Settings (Gear)** icon in the top-right of any screen to update the Server URL to match your host machine's LAN IP address (e.g., `http://192.168.1.100:8000/`).
 
 ---
 

@@ -1,38 +1,36 @@
-Android App scaffold for DepthForge
+# Native Android App (Kotlin & Jetpack Compose)
 
-Open this folder in Android Studio (Artisan) and build the `app` module.
+This directory contains the native Android application for **DepthForge**. Built with Jetpack Compose, it features a complete user interface and direct backend API connections.
 
-Features included:
-- Jetpack Compose single-activity scaffold (`MainActivity.kt`)
-- Retrofit + OkHttp client stubs (`ApiClient.kt`) connecting to the local edge server
-- Basic safety modal flow before launching laser
-- WebSocket listener stub for job updates
+## 🌟 Key Features
 
-Quick start:
-1. Open `android_app` in Android Studio.
-2. Sync Gradle and build the project.
-3. Run on a device or emulator.
+* **Landing Page & Lead Form:** Visual entry screen showing the brand logo. Includes a popup mailing list registration form (Full Name, Email, Premium Interest checkbox) that records entries via `/api/lead` and skips prompting on subsequent app launches.
+* **The Forge (Depth-Map Generator):** 
+  * Generates 16-bit depth maps using prompt entries via the cloud `/api/generate` route.
+  * **Post-Processing pipeline animation:** A beautiful visual sequence demonstrating the bilateral filtering, inpainting, scaling, normalization, and export stages during `/api/postprocess`.
+  * **Admin Queue Submission:** Prompts for student name and exports the LightBurn project file to `/api/laser/lightburn` on the server.
+  * **Direct Spindle Control:** Strict safety check dialog verifying laser pathway clear and exhaust active. Authenticated with typed `CONFIRM` verification. It initiates the Ruida mock sequence and streams status updates over WebSockets (`/ws`) or fallback HTTP status polling.
+* **Support AI:** Direct chat connection with the SLCreations studio assistant (via `/api/chat`), with unique local session persistence.
+* **Admin Dashboard:** Access to the Student Queue (with direct "Open in LightBurn" triggers) and Login Leads tracker.
+* **Dynamic Connection Settings:** Tap the **Settings (Gear)** icon in the top-right corner of any screen to quickly adjust the API Base URL.
 
-Notes:
-- The app expects the server at `http://10.0.2.2:8000` when using the Android emulator (maps to host localhost).
-- Replace endpoints or adjust the base URL in `ApiClient.kt` as needed.
+---
 
-Run & build (emulator)
-1. Start your Node server locally (from the repo root):
+## 🚀 Getting Started
 
-```bash
-npm start
-```
+### 1. Open the Project
+Open the `android_app/` folder directly in **Android Studio**.
 
-2. Open `android_app` in Android Studio, let Gradle sync.
-3. Run the default `app` configuration on an Android emulator. The emulator maps host `localhost` to `10.0.2.2`, which the app uses by default.
+### 2. Sync and Build
+Let Gradle sync project dependencies, and build the `app` configuration.
 
-Run & build (physical device)
-1. Connect your Android device via USB and enable USB debugging.
-2. Update `ApiClient.kt` `BASE` constant to your host machine IP (e.g. `http://192.168.1.100:8000/`).
-3. Build and run the app on the device from Android Studio.
+### 3. Setup Connection Address
+* **Android Emulator:** The emulator automatically routes localhost of your computer to `http://10.0.2.2:8000/`. This is the default.
+* **Physical Device:** Ensure your phone is connected to the same Wi-Fi network as your host machine. Tap the gear icon in the top-right corner of the app's landing screen and enter your computer's LAN IP address (e.g. `http://192.168.1.100:8000/`).
 
-Notes & next steps
-- The app currently uses a mock server connector for the Ruida workflow; replace `lib/ruida_mock.js` with a production connector when hardware docs/SDK are available.
-- The safety modal enforces typed confirmation and two checkbox confirmations; server also requires `safetyConfirmed=true`.
-- To test job updates, open the browser to `http://localhost:8000` and prepare/launch a job via the API or use the app buttons.
+---
+
+## 🛠️ Tech Stack & Dependencies
+* **Core:** Kotlin & Jetpack Compose (Material 2 Theme)
+* **Networking & Parsing:** OkHttp3 & Gson (using coroutines for asynchronous calls)
+* **Status Updates:** WebSocket connections for Ruida job updates, with regular HTTP polling fallbacks.
