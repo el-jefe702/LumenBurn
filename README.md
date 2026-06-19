@@ -42,7 +42,7 @@ The main runtime operates as a local **Node.js + Express Edge Server** that coor
  ┣ 📜 tune_depth.py     # Interactive OpenCV depth-map tuner
  ┣ 📂 templates/        # HTML pages for the web UI
  ┣ 📂 static/           # Uploaded and generated assets (images, STLs, etc.)
- ┣ 📂 android_app/      # Android WebView scaffold mirroring the local server
+ ┣ 📂 android_app/      # Native Android Kotlin + Jetpack Compose application
  ┣ 📂 blender_plugin/   # Blender-side helper code and notes
  ┗ 📂 lib/              # LightBurn file generator tools
 ```
