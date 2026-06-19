@@ -537,4 +537,4 @@ app.post('/api/submit', upload.single('file'), (req, res) => {
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-server.listen(port, () => console.log(`Node.js DepthForge running on http://localhost:${port}`));
+server.listen(port, '0.0.0.0', () => console.log(`Node.js DepthForge running on http://0.0.0.0:${port}`));

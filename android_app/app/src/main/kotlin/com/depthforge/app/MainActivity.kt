@@ -718,6 +718,7 @@ fun TheForgeScreen(
     var isPolished by remember { mutableStateOf(false) }
     var isGenerating by remember { mutableStateOf(false) }
     var isPolishing by remember { mutableStateOf(false) }
+    var lastError by remember { mutableStateOf<String?>(null) }
 
     // Queue button states
     var isSentToQueue by remember { mutableStateOf(false) }
@@ -733,7 +734,7 @@ fun TheForgeScreen(
     var currentJobId by remember { mutableStateOf("") }
 
     // Post-processing pipeline step animation index
-    var activePolishStep by remember { mutableStateOf(-1) }
+    var activePolishStep by remember { mutableIntStateOf(-1) }
 
     val scope = rememberCoroutineScope()
 
@@ -812,6 +813,7 @@ fun TheForgeScreen(
                     onClick = {
                         if (promptInput.isBlank()) return@Button
                         isGenerating = true
+                        lastError = null
                         currentImageUrl = ""
                         isPolished = false
                         isSentToQueue = false
@@ -821,9 +823,11 @@ fun TheForgeScreen(
                                 if (result["status"] == "success") {
                                     currentImageUrl = result["image_url"] as? String ?: ""
                                 } else {
+                                    lastError = "Server Error: ${result["message"] ?: "Unknown failure"}"
                                     Log.e("Forge", "Server failed to generate")
                                 }
                             } catch (e: Exception) {
+                                lastError = "Connection Error: ${e.message}"
                                 Log.e("Forge", "Generate failed: ${e.message}")
                             } finally {
                                 isGenerating = false
@@ -835,6 +839,18 @@ fun TheForgeScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Ignite Forge", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+
+                if (lastError != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = lastError!!,
+                        color = Color.Red,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -1857,7 +1873,7 @@ fun NetworkImage(
 ) {
     var bitmap by remember(url) { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember(url) { mutableStateOf(true) }
-    var isError by remember(url) { mutableStateOf(false) }
+    var errorMessage by remember(url) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(url) {
         if (url.isBlank()) {
@@ -1865,7 +1881,7 @@ fun NetworkImage(
             return@LaunchedEffect
         }
         isLoading = true
-        isError = false
+        errorMessage = null
         try {
             val imageBytes = ApiClient.downloadImage(url)
             if (imageBytes != null) {
@@ -1873,14 +1889,14 @@ fun NetworkImage(
                 if (decoded != null) {
                     bitmap = decoded
                 } else {
-                    isError = true
+                    errorMessage = "Bitmap decode failed"
                 }
             } else {
-                isError = true
+                errorMessage = "Network download failed"
             }
         } catch (e: Exception) {
             Log.e("NetworkImage", "Error loading image: ${e.message}", e)
-            isError = true
+            errorMessage = e.message
         } finally {
             isLoading = false
         }
@@ -1889,10 +1905,11 @@ fun NetworkImage(
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         if (isLoading) {
             CircularProgressIndicator(color = GoldAccent, modifier = Modifier.size(24.dp))
-        } else if (isError || bitmap == null) {
+        } else if (errorMessage != null || bitmap == null) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(8.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Warning,
@@ -1901,7 +1918,19 @@ fun NetworkImage(
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Error Loading", color = Color.Gray, fontSize = 10.sp)
+                Text(
+                    text = errorMessage ?: "Unknown Error",
+                    color = Color.Gray,
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "URL: $url",
+                    color = Color.DarkGray,
+                    fontSize = 8.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
             }
         } else {
             Image(

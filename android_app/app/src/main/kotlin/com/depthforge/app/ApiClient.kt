@@ -27,13 +27,15 @@ object ApiClient {
             .url(fullUrl)
             .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
             .build()
-        val resp = http.newCall(req).execute()
-        if (!resp.isSuccessful) {
-            val errBody = resp.body?.string() ?: ""
-            throw Exception("Request failed (${resp.code}): $errBody")
+        
+        http.newCall(req).execute().use { resp ->
+            val bodyText = resp.body?.string() ?: ""
+            if (!resp.isSuccessful) {
+                throw Exception("Request failed (${resp.code}): $bodyText")
+            }
+            if (bodyText.isBlank()) throw Exception("Empty response")
+            return@withContext gson.fromJson(bodyText, Map::class.java) as Map<String, Any>
         }
-        val bodyText = resp.body?.string() ?: throw Exception("Empty response")
-        return@withContext gson.fromJson(bodyText, Map::class.java) as Map<String, Any>
     }
 
     private suspend fun getJson(path: String): Any = withContext(Dispatchers.IO) {
@@ -42,12 +44,15 @@ object ApiClient {
             .url(fullUrl)
             .get()
             .build()
-        val resp = http.newCall(req).execute()
-        if (!resp.isSuccessful) {
-            throw Exception("GET failed (${resp.code})")
+        
+        http.newCall(req).execute().use { resp ->
+            val bodyText = resp.body?.string() ?: ""
+            if (!resp.isSuccessful) {
+                throw Exception("GET failed (${resp.code}): $bodyText")
+            }
+            if (bodyText.isBlank()) throw Exception("Empty response")
+            return@withContext gson.fromJson(bodyText, Any::class.java)
         }
-        val bodyText = resp.body?.string() ?: throw Exception("Empty response")
-        return@withContext gson.fromJson(bodyText, Any::class.java)
     }
 
     // --- Core Functions ---
@@ -97,10 +102,11 @@ object ApiClient {
             .url(fullUrl)
             .get()
             .build()
-        val resp = http.newCall(req).execute()
-        if (!resp.isSuccessful) throw Exception("Status failed (${resp.code})")
-        val body = resp.body?.string() ?: throw Exception("Empty response")
-        return@withContext gson.fromJson(body, Map::class.java) as Map<String, Any>
+        http.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw Exception("Status failed (${resp.code})")
+            val body = resp.body?.string() ?: throw Exception("Empty response")
+            return@withContext gson.fromJson(body, Map::class.java) as Map<String, Any>
+        }
     }
 
     // --- Chat Support ---
@@ -111,12 +117,22 @@ object ApiClient {
     // --- Helper to Download Image Bytes ---
 
     suspend fun downloadImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
-        val fullUrl = if (url.startsWith("http")) url else baseUrl.removeSuffix("/") + "/" + url.removePrefix("/")
+        var targetUrl = url.trim()
+        // If the server returns localhost/127.0.0.1, we must translate it for the emulator/device
+        if (targetUrl.contains("://localhost") || targetUrl.contains("://127.0.0.1")) {
+            val baseHost = baseUrl.substringAfter("://").substringBefore("/")
+            targetUrl = targetUrl
+                .replace("localhost", baseHost.substringBefore(":"))
+                .replace("127.0.0.1", baseHost.substringBefore(":"))
+        }
+
+        val fullUrl = if (targetUrl.startsWith("http")) targetUrl else baseUrl.removeSuffix("/") + "/" + targetUrl.removePrefix("/")
         val req = Request.Builder().url(fullUrl).build()
         try {
-            val resp = http.newCall(req).execute()
-            if (!resp.isSuccessful) return@withContext null
-            return@withContext resp.body?.bytes()
+            http.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                return@withContext resp.body?.bytes()
+            }
         } catch (e: Exception) {
             return@withContext null
         }
