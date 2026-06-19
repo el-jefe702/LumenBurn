@@ -3,6 +3,7 @@ activityCompose = "1.13.0"
 coreKtx = "1.19.0"
 kotlinxCoroutinesAndroid = "1.11.0"
 material = "1.11.2"
+materialIcons = "1.7.8"
 okhttp3 = "5.4.0"
 retrofit2 = "3.0.0"
 ui = "1.11.2"
@@ -11,6 +12,8 @@ ui = "1.11.2"
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-material = { group = "androidx.compose.material", name = "material", version.ref = "material" }
+material-icons-core = { group = "androidx.compose.material", name = "material-icons-core", version.ref = "materialIcons" }
+material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIcons" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling", version.ref = "ui" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "ui" }
