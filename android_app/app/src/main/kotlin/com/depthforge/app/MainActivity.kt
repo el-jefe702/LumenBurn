@@ -34,6 +34,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import android.annotation.SuppressLint
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.*
 import java.util.UUID
 
@@ -736,6 +740,11 @@ fun TheForgeScreen(
     // Post-processing pipeline step animation index
     var activePolishStep by remember { mutableIntStateOf(-1) }
 
+    // 3D Preview states
+    var show3DPreview by remember { mutableStateOf(false) }
+    var currentGlbUrl by remember { mutableStateOf("") }
+    var isCompiling3d by remember { mutableStateOf(false) }
+
     val scope = rememberCoroutineScope()
 
     Column(
@@ -817,6 +826,8 @@ fun TheForgeScreen(
                         currentImageUrl = ""
                         isPolished = false
                         isSentToQueue = false
+                        show3DPreview = false
+                        currentGlbUrl = ""
                         scope.launch {
                             try {
                                 val result = ApiClient.generate(promptInput)
@@ -839,6 +850,580 @@ fun TheForgeScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Ignite Forge", color = Color.Black, fontWeight = FontWeight.Bold)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                 }
 
                 if (lastError != null) {
@@ -981,11 +1566,98 @@ fun TheForgeScreen(
                             }
                         }
                     }
+                } else if (isCompiling3d) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f))
+                    ) {
+                        CircularProgressIndicator(color = GoldAccent)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Compiling 3D Mesh...", color = Color.White, fontSize = 14.sp)
+                        Text("(Sending to SpatialScrap)", color = TextSecondary, fontSize = 10.sp)
+                    }
+                } else if (show3DPreview && currentGlbUrl.isNotBlank()) {
+                    GlbModelViewer(
+                        glbUrl = currentGlbUrl,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else {
                     NetworkImage(
                         url = currentImageUrl,
                         modifier = Modifier.fillMaxSize()
                     )
+                }
+
+                // 2D/3D View Toggle
+                if (currentImageUrl.isNotBlank() && !isGenerating && !isPolishing && !isCompiling3d) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(20.dp))
+                            .border(1.dp, GrayBorder, RoundedCornerShape(20.dp))
+                            .padding(2.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Button(
+                            onClick = { show3DPreview = false },
+                            colors = ButtonDefaults.buttonColors(
+                                backgroundColor = if (!show3DPreview) Color.White else Color.Transparent
+                            ),
+                            elevation = ButtonDefaults.elevation(0.dp, 0.dp, 0.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text(
+                                "2D Map",
+                                color = if (!show3DPreview) Color.Black else Color.Gray,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Button(
+                            onClick = {
+                                if (currentGlbUrl.isBlank()) {
+                                    isCompiling3d = true
+                                    scope.launch {
+                                        try {
+                                            val result = ApiClient.preview3d(currentImageUrl)
+                                            if (result["status"] == "success") {
+                                                currentGlbUrl = result["glb_url"] as? String ?: ""
+                                                show3DPreview = true
+                                            } else {
+                                                lastError = "3D mesh compilation failed."
+                                            }
+                                        } catch (e: Exception) {
+                                            lastError = "3D Error: ${e.message}"
+                                            Log.e("Forge", "3D preview failed: ${e.message}")
+                                        } finally {
+                                            isCompiling3d = false
+                                        }
+                                    }
+                                } else {
+                                    show3DPreview = true
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                backgroundColor = if (show3DPreview) Color.White else Color.Transparent
+                            ),
+                            elevation = ButtonDefaults.elevation(0.dp, 0.dp, 0.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text(
+                                "3D Mesh",
+                                color = if (show3DPreview) Color.Black else Color.Gray,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1003,6 +1675,8 @@ fun TheForgeScreen(
                         currentImageUrl = ""
                         isPolished = false
                         isSentToQueue = false
+                        show3DPreview = false
+                        currentGlbUrl = ""
                     },
                     colors = ButtonDefaults.buttonColors(backgroundColor = Color.DarkGray),
                     modifier = Modifier.weight(1f)
@@ -1037,6 +1711,8 @@ fun TheForgeScreen(
                                 if (data != null && data["status"] == "success") {
                                     currentImageUrl = data["image_url"] as? String ?: currentImageUrl
                                     isPolished = true
+                                    show3DPreview = false
+                                    currentGlbUrl = ""
                                 }
                                 isPolishing = false
                             }
@@ -1940,5 +2616,62 @@ fun NetworkImage(
                 contentScale = contentScale
             )
         }
+    }
+}
+
+// --- 3D MODEL VIEWER (WebView-based) ---
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun GlbModelViewer(
+    glbUrl: String,
+    modifier: Modifier = Modifier
+) {
+    val fullUrl = remember(glbUrl) {
+        if (glbUrl.startsWith("http")) glbUrl
+        else ApiClient.baseUrl.removeSuffix("/") + "/" + glbUrl.removePrefix("/")
+    }
+
+    key(fullUrl) {
+        AndroidView(
+            factory = { context ->
+                WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    webViewClient = WebViewClient()
+                    setBackgroundColor(android.graphics.Color.parseColor("#121212"))
+
+                    val html = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+                            <style>
+                                body { margin: 0; background: #121212; overflow: hidden; }
+                                model-viewer { width: 100%; height: 100vh; }
+                            </style>
+                        </head>
+                        <body>
+                            <model-viewer src="$fullUrl" 
+                                camera-controls auto-rotate 
+                                shadow-intensity="1"
+                                style="width: 100%; height: 100vh; background-color: #121212;">
+                            </model-viewer>
+                        </body>
+                        </html>
+                    """.trimIndent()
+
+                    loadDataWithBaseURL(
+                        ApiClient.baseUrl,
+                        html,
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
+                }
+            },
+            modifier = modifier
+        )
     }
 }

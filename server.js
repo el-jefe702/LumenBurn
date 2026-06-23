@@ -201,7 +201,7 @@ app.post('/api/generate', async (req, res) => {
         const filepath = path.join(generatedDir, filename);
         
         const base64Data = imageResult.generatedImages[0].image.imageBytes;
-        fs.writeFileSync(filepath, Buffer.from(base64Data, 'base64'));
+        await fs.promises.writeFile(filepath, Buffer.from(base64Data, 'base64'));
 
         console.log(`[${new Date().toLocaleTimeString()}] ✅ POST /api/generate - Generation complete: ${filename}`);
         res.json({ status: "success", image_url: `/static/generated/${filename}` });
@@ -260,7 +260,7 @@ const processMesh = async (imageUrl, extension) => {
                     }
 
                     const arrayBuffer = await response.arrayBuffer();
-                    fs.writeFileSync(meshPath, Buffer.from(arrayBuffer));
+                    await fs.promises.writeFile(meshPath, Buffer.from(arrayBuffer));
                     console.log(`[DepthForge] Real GLB generated successfully using SpatialScrap: ${path.basename(meshPath)}`);
                 } catch (edgeErr) {
                     console.warn(`[DepthForge] SpatialScrap edge server failed/unavailable, falling back: ${edgeErr.message}`);
@@ -275,7 +275,7 @@ const processMesh = async (imageUrl, extension) => {
         console.error(`Mesh generation for ${extension} failed, generating fallback.`, error.message);
         const filename = path.basename(imageUrl || "");
         const meshPath = path.join(generatedDir, `${path.parse(filename).name}.${extension}`);
-        fs.writeFileSync(meshPath, "solid dummy\nendsolid dummy\n");
+        await fs.promises.writeFile(meshPath, "solid dummy\nendsolid dummy\n");
         return meshPath;
     }
 };
@@ -392,7 +392,7 @@ app.get('/api/admin/queue', async (req, res) => {
 });
 
 // Laser API: generate a LightBurn project file
-app.post('/api/laser/lightburn', (req, res) => {
+app.post('/api/laser/lightburn', async (req, res) => {
     try {
         const imageUrl = req.body.image_url || '';
         const studentName = req.body.student_name || '';
@@ -414,7 +414,7 @@ app.post('/api/laser/lightburn', (req, res) => {
         const lbrn2Path = path.join(generatedDir, lbrn2Filename);
         const xmlContent = generateLightburnXML(imagePath, 100, 100);
         
-        fs.writeFileSync(lbrn2Path, xmlContent, 'utf-8');
+        await fs.promises.writeFile(lbrn2Path, xmlContent, 'utf-8');
         
         // Attempt to auto-open if requested by the client
         if (req.body.auto_open) {
@@ -505,7 +505,7 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-app.post('/api/lead', (req, res) => {
+app.post('/api/lead', async (req, res) => {
     try {
         const { name, email, premium_interest } = req.body;
         const timestamp = new Date().toISOString();
@@ -519,10 +519,10 @@ app.post('/api/lead', (req, res) => {
 
         if (!fs.existsSync(leadsCsvPath)) {
             // If file doesn't exist, create it with the header
-            fs.writeFileSync(leadsCsvPath, header + record, 'utf-8');
+            await fs.promises.writeFile(leadsCsvPath, header + record, 'utf-8');
         } else {
             // Otherwise, append the new record
-            fs.appendFileSync(leadsCsvPath, record, 'utf-8');
+            await fs.promises.appendFile(leadsCsvPath, record, 'utf-8');
         }
 
         res.json({ status: "success" });
@@ -583,7 +583,7 @@ app.get('/api/admin/leads', (req, res) => {
 });
 
 const upload = multer({ dest: uploadsDir });
-app.post('/api/submit', upload.single('file'), (req, res) => {
+app.post('/api/submit', upload.single('file'), async (req, res) => {
     try {
         const { name, email, premium_interest } = req.body;
         const file = req.file;
@@ -591,8 +591,9 @@ app.post('/api/submit', upload.single('file'), (req, res) => {
             return res.status(400).json({ error: "No file uploaded." });
         }
         const ext = path.extname(file.originalname);
-        const safeFilename = `${name}_${uuidv4().substring(0, 4)}${ext}`;
-        fs.renameSync(file.path, path.join(uploadsDir, safeFilename));
+        const safeName = (name || 'anonymous').replace(/[^a-zA-Z0-9_-]/g, '');
+        const safeFilename = `${safeName}_${uuidv4().substring(0, 4)}${ext}`;
+        await fs.promises.rename(file.path, path.join(uploadsDir, safeFilename));
         res.json({ status: "success", message: "File received!" });
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
