@@ -74,6 +74,16 @@ app.use('/static', express.static(staticDir));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Request logging middleware
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        console.log(`[${new Date().toLocaleTimeString()}] 🌍 ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+    });
+    next();
+});
+
 // Render standard .html files using ejs behind the scenes
 app.engine('html', ejs.renderFile);
 app.set('view engine', 'html');
@@ -124,7 +134,18 @@ const resolvePythonExecutable = () => {
 const runPythonProcessor = (command, args) => {
     return new Promise((resolve, reject) => {
         const pythonExec = resolvePythonExecutable();
-        const pyProg = spawn(pythonExec, ['processor.py', command, ...args]);
+        // Use -u to run Python in unbuffered mode so print statements are output in real-time
+        const pyProg = spawn(pythonExec, ['-u', 'processor.py', command, ...args]);
+        
+        pyProg.stdout.on('data', (data) => {
+            const lines = data.toString().split('\n');
+            lines.forEach(line => {
+                if (line.trim()) {
+                    console.log(`[Python Processor] ${line.trim()}`);
+                }
+            });
+        });
+
         let errorOutput = '';
         pyProg.stderr.on('data', (data) => errorOutput += data.toString());
         
@@ -150,6 +171,7 @@ app.get('/admin', (req, res) => {
 });
 
 app.post('/api/generate', async (req, res) => {
+    console.log(`[${new Date().toLocaleTimeString()}] 🚀 POST /api/generate - Starting generation...`);
     try {
         const studentPrompt = req.body.prompt || "";
         
@@ -181,6 +203,7 @@ app.post('/api/generate', async (req, res) => {
         const base64Data = imageResult.generatedImages[0].image.imageBytes;
         fs.writeFileSync(filepath, Buffer.from(base64Data, 'base64'));
 
+        console.log(`[${new Date().toLocaleTimeString()}] ✅ POST /api/generate - Generation complete: ${filename}`);
         res.json({ status: "success", image_url: `/static/generated/${filename}` });
     } catch (error) {
         console.error(error);
@@ -189,11 +212,13 @@ app.post('/api/generate', async (req, res) => {
 });
 
 app.post('/api/postprocess', async (req, res) => {
+    console.log(`[${new Date().toLocaleTimeString()}] ⚙️ POST /api/postprocess - Triggering Python helpers...`);
     try {
         const filename = path.basename(req.body.image_url || "");
         const inputPath = path.join(generatedDir, filename);
         const outputPath = path.join(generatedDir, `forge_${filename}`);
         await runPythonProcessor('smooth', [inputPath, outputPath]);
+        console.log(`[${new Date().toLocaleTimeString()}] ✅ POST /api/postprocess - Smoothing complete: forge_${filename}`);
         res.json({ status: "success", image_url: `/static/generated/forge_${filename}` });
     } catch (error) {
         console.error("Python smoothing failed, bypassing:", error.message);
@@ -208,7 +233,42 @@ const processMesh = async (imageUrl, extension) => {
         const inputPath = path.join(generatedDir, filename);
         const meshPath = path.join(generatedDir, `${path.parse(filename).name}.${extension}`);
         if (!fs.existsSync(meshPath)) {
-            await runPythonProcessor('mesh', [inputPath, meshPath]);
+            if (extension === 'glb') {
+                console.log(`[DepthForge] Sending depth map to SpatialScrap edge server on port 8080...`);
+                try {
+                    const formData = new FormData();
+                    const fileBuffer = fs.readFileSync(inputPath);
+                    const fileBlob = new Blob([fileBuffer], { type: 'image/png' });
+                    formData.append('file', fileBlob, filename);
+                    formData.append('target_triangles', '0');
+                    formData.append('reduction_ratio', '0.75');
+                    formData.append('depth_scale', '0.15');
+                    formData.append('depth_downsample', '1');
+                    formData.append('depth_pixel_size', '1.0');
+                    formData.append('depth_invert', 'false');
+                    formData.append('depth_smooth_passes', '1');
+                    formData.append('use_blender', 'true');
+                    formData.append('bake_relief', 'false');
+
+                    const response = await fetch('http://127.0.0.1:8080/process/sync', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Edge server error: ${response.status} - ${await response.text()}`);
+                    }
+
+                    const arrayBuffer = await response.arrayBuffer();
+                    fs.writeFileSync(meshPath, Buffer.from(arrayBuffer));
+                    console.log(`[DepthForge] Real GLB generated successfully using SpatialScrap: ${path.basename(meshPath)}`);
+                } catch (edgeErr) {
+                    console.warn(`[DepthForge] SpatialScrap edge server failed/unavailable, falling back: ${edgeErr.message}`);
+                    await runPythonProcessor('mesh', [inputPath, meshPath]);
+                }
+            } else {
+                await runPythonProcessor('mesh', [inputPath, meshPath]);
+            }
         }
         return meshPath;
     } catch (error) {

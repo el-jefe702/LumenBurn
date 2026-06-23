@@ -7,11 +7,11 @@ def smooth_image(input_path, output_path):
     # ==========================================
     # STEP 1: LOAD & CONVERT TO 16-BIT GRAYSCALE
     # ==========================================
-    # Load the image directly as grayscale
+    print("Loading image and converting to 16-bit grayscale...", flush=True)
     img_8bit = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
 
     if img_8bit is None:
-        print(f"Error: Could not load {input_path}")
+        print(f"Error: Could not load {input_path}", flush=True)
         sys.exit(1)
 
     # Upscale from 8-bit (0-255) to 16-bit (0-65535)
@@ -21,6 +21,7 @@ def smooth_image(input_path, output_path):
     # ==========================================
     # STEP 4: CLEAN UP MISSING DATA (INPAINTING)
     # ==========================================
+    print("Identifying and cleaning up missing data (inpainting)...", flush=True)
     # Do this before filtering so noise doesn't bleed.
     # Create a mask where data is missing (pure black pixels)
     missing_mask = (img_16bit == 0).astype(np.uint8)
@@ -31,6 +32,7 @@ def smooth_image(input_path, output_path):
 
     # If large holes exist, downscale mask to 8-bit to use OpenCV's inpaint
     if np.any(missing_mask):
+        print("Large missing data holes detected; applying telea inpainting...", flush=True)
         # Convert temporarily to 8-bit for cv2.inpaint compatibility
         tmp_8bit = (cleaned_16bit // 257).astype(np.uint8)
         inpainted_8bit = cv2.inpaint(tmp_8bit, missing_mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
@@ -40,6 +42,7 @@ def smooth_image(input_path, output_path):
     # ==========================================
     # STEP 2: SPATIAL FILTERING (FIX BANDING)
     # ==========================================
+    print("Applying bilateral spatial filtering to fix banding while preserving edges...", flush=True)
     # OpenCV bilateralFilter does not support uint16 natively. 
     # Convert to float32 first to perform precise mathematical smoothing.
     float_depth = cleaned_16bit.astype(np.float32)
@@ -48,12 +51,14 @@ def smooth_image(input_path, output_path):
     # d=9 (pixel neighborhood), sigmaColor=5000 (intensity variation), sigmaSpace=5 (coordinate space)
     filtered_float = cv2.bilateralFilter(float_depth, d=9, sigmaColor=5000.0, sigmaSpace=5.0)
 
+    print("Applying Gaussian blur to smooth micro-textures...", flush=True)
     # Optional minor Gaussian blur to smooth any micro-textures
     filtered_float = cv2.GaussianBlur(filtered_float, (3, 3), 0)
 
     # ==========================================
     # STEP 3: NORMALIZE THE DEPTH RANGE
     # ==========================================
+    print("Stretching depth values to normalize full 16-bit range...", flush=True)
     # Find the lowest and highest values in the filtered image
     min_val, max_val, _, _ = cv2.minMaxLoc(filtered_float)
 
@@ -68,6 +73,7 @@ def smooth_image(input_path, output_path):
     # ==========================================
     # STEP 5: EXPORT AS LOSSLESS 16-BIT PNG
     # ==========================================
+    print(f"Exporting processed 16-bit PNG to {output_path}...", flush=True)
     # Explicitly use compression parameters for maximum file safety
     cv2.imwrite(output_path, final_16bit, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
