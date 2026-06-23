@@ -26,20 +26,20 @@ The main runtime operates as a local **Node.js + Express Edge Server** that coor
 
 ```mermaid
 graph TD
-    subgraph Client Application
-        Web[Local Web UI / Android App]
+    subgraph "Client Application"
+        Web["Local Web UI / Android App"]
     end
 
-    subgraph DepthForge Backend (Port 8000)
-        Express[Node.js Express Server]
-        CVProc[OpenCV Python Processor]
-        LBGen[LightBurn File Generator]
+    subgraph "DepthForge Backend (Port 8000)"
+        Express["Node.js Express Server"]
+        CVProc["OpenCV Python Processor"]
+        LBGen["LightBurn File Generator"]
     end
 
-    subgraph SpatialScrap Edge Server (Port 8080)
-        FastAPI[FastAPI Server]
-        SSP[SpatialScrap Pipeline]
-        Blender[Blender API Engine]
+    subgraph "SpatialScrap Edge Server (Port 8080)"
+        FastAPI["FastAPI Server"]
+        SSP["SpatialScrap Pipeline"]
+        Blender["Blender API Engine"]
     end
 
     Web -->|Prompt / Upload| Express
