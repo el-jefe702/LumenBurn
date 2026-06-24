@@ -227,6 +227,22 @@ app.post('/api/postprocess', async (req, res) => {
     }
 });
 
+app.post('/api/remove_bg', async (req, res) => {
+    console.log(`[${new Date().toLocaleTimeString()}] ✂️ POST /api/remove_bg - Triggering Python helpers...`);
+    try {
+        const filename = path.basename(req.body.image_url || "");
+        const inputPath = path.join(generatedDir, filename);
+        const outputPath = path.join(generatedDir, `iso_${filename}`);
+        await runPythonProcessor('remove_bg', [inputPath, outputPath]);
+        console.log(`[${new Date().toLocaleTimeString()}] ✅ POST /api/remove_bg - Background removed: iso_${filename}`);
+        res.json({ status: "success", image_url: `/static/generated/iso_${filename}` });
+    } catch (error) {
+        console.error("Python remove_bg failed, bypassing:", error.message);
+        const filename = path.basename(req.body.image_url || "");
+        res.json({ status: "success", image_url: `/static/generated/${filename}` });
+    }
+});
+
 const processMesh = async (imageUrl, extension) => {
     try {
         const filename = path.basename(imageUrl || "");
@@ -247,6 +263,7 @@ const processMesh = async (imageUrl, extension) => {
                     formData.append('depth_pixel_size', '1.0');
                     formData.append('depth_invert', 'false');
                     formData.append('depth_smooth_passes', '1');
+                    formData.append('depth_remove_bg_plane', 'true');
                     formData.append('use_blender', 'true');
                     formData.append('bake_relief', 'false');
 

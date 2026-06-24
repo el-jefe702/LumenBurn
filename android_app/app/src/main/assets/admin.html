@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DepthForge | Admin Queue</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #121212; }
+        .vintage-font { font-family: 'Cinzel', serif; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-200 flex flex-col items-center py-8 px-4">
+
+    <header class="w-full max-w-6xl flex justify-between items-center border-b border-gray-700 pb-4 mb-6">
+        <div class="flex items-center gap-4">
+            <img src="/static/logo.png" alt="Logo" class="w-12 h-12 object-contain">
+            <h2 class="text-3xl vintage-font font-bold text-white tracking-wider">Admin Dashboard</h2>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="openLeadsModal()" class="text-sm text-gray-400 hover:text-white transition-colors border border-gray-600 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center gap-2">
+                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+                View Sign-Ups
+            </button>
+            <button onclick="fetchQueue()" class="text-sm text-gray-400 hover:text-white transition-colors border border-gray-600 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center gap-2">
+                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.667 0l3.181-3.183m-4.991-2.691V5.25a2.25 2.25 0 00-2.25-2.25L5.25 3m14.485 12.344l-3.181-3.183a8.25 8.25 0 00-11.667 0l-3.181 3.183" /></svg>
+                Refresh Queue
+            </button>
+        </div>
+    </header>
+
+    <main class="w-full max-w-6xl bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
+        <table class="w-full text-left">
+            <thead class="bg-gray-900 text-xs text-gray-400 uppercase tracking-wider">
+                <tr>
+                    <th class="p-4">Student / File</th>
+                    <th class="p-4">Submitted At</th>
+                    <th class="p-4 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="queueTableBody" class="divide-y divide-gray-700">
+                <!-- Rows will be injected by JavaScript -->
+                <tr>
+                    <td colspan="3" class="p-8 text-center text-gray-500">Loading queue...</td>
+                </tr>
+            </tbody>
+        </table>
+    </main>
+
+    <!-- Sign-Ups Modal -->
+    <div id="leadsModal" class="hidden fixed inset-0 bg-black bg-opacity-80 z-50 flex flex-col items-center justify-center p-4" onclick="closeLeadsModal()">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 class="text-xl vintage-font font-bold text-white">Login Sign-Ups</h3>
+                <button onclick="closeLeadsModal()" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-grow">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-gray-900 text-xs text-gray-400 uppercase tracking-wider sticky top-0">
+                        <tr>
+                            <th class="p-3 border-b border-gray-700">Date/Time</th>
+                            <th class="p-3 border-b border-gray-700">Name</th>
+                            <th class="p-3 border-b border-gray-700">Email</th>
+                            <th class="p-3 border-b border-gray-700 text-center">Premium Interest</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leadsTableBody" class="divide-y divide-gray-700">
+                        <tr>
+                            <td colspan="4" class="p-8 text-center text-gray-500">Loading sign-ups...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', fetchQueue);
+
+        function openLeadsModal() {
+            document.getElementById('leadsModal').classList.remove('hidden');
+            fetchLeads();
+        }
+
+        function closeLeadsModal() {
+            document.getElementById('leadsModal').classList.add('hidden');
+        }
+
+        async function fetchLeads() {
+            const tableBody = document.getElementById('leadsTableBody');
+            tableBody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-500">Loading sign-ups...</td></tr>';
+
+            try {
+                const response = await fetch('/api/admin/leads');
+                if (!response.ok) throw new Error('Failed to fetch leads.');
+                
+                const leads = await response.json();
+                
+                if (leads.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-500">No sign-ups found.</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = ''; 
+
+                leads.forEach(lead => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-700/50 transition-colors text-sm';
+                    
+                    const date = new Date(lead.timestamp).toLocaleString();
+                    const isPremium = lead.premium_interest ? '<span class="text-green-400 font-bold">Yes</span>' : '<span class="text-gray-500">No</span>';
+
+                    row.innerHTML = ` 
+                        <td class="p-3 text-gray-400">${date}</td>
+                        <td class="p-3 text-white font-medium">${lead.name}</td>
+                        <td class="p-3 text-gray-300">${lead.email}</td>
+                        <td class="p-3 text-center">${isPremium}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Fetch Leads Error:', error);
+                tableBody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-400">${error.message}</td></tr>`;
+            }
+        }
+
+        async function fetchQueue() {
+            const tableBody = document.getElementById('queueTableBody');
+            tableBody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-500">Loading queue...</td></tr>';
+
+            try {
+                const response = await fetch('/api/admin/queue');
+                if (!response.ok) throw new Error('Failed to fetch queue from server.');
+                
+                const files = await response.json();
+                
+                if (files.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-500">The queue is empty.</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = ''; // Clear loading state
+
+                files.forEach(file => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-700/50 transition-colors';
+                    
+                    const date = new Date(file.createdAt).toLocaleString();
+
+                    row.innerHTML = ` 
+                        <td class="p-4">
+                            <div class="text-white font-bold text-sm">${file.studentName}</div>
+                            <div class="text-gray-500 font-mono text-xs mt-1">${file.lbrn2Filename}</div>
+                        </td>
+                        <td class="p-4 text-gray-400 text-sm">${date}</td>
+                        <td class="p-4 text-right">
+                            <button 
+                                id="btn-${file.lbrn2Filename}"
+                                onclick="openInLightburn(this, '${file.imageUrl}')"
+                                class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors shadow-md"
+                            >
+                                Open in LightBurn
+                            </button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+            } catch (error) {
+                console.error('Fetch Queue Error:', error);
+                tableBody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-400">${error.message}</td></tr>`;
+            }
+        }
+
+        async function openInLightburn(button, imageUrl) {
+            button.disabled = true;
+            button.textContent = 'Opening...';
+
+            try {
+                const response = await fetch('/api/laser/lightburn', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_url: imageUrl, auto_open: true })
+                });
+
+                if (!response.ok) throw new Error('Server failed to open the file.');
+
+                button.textContent = '✔️ Opened';
+                button.classList.replace('bg-indigo-600', 'bg-emerald-600');
+                button.classList.replace('hover:bg-indigo-500', 'hover:bg-emerald-500');
+
+            } catch (error) {
+                console.error('Open in LightBurn Error:', error);
+                alert(error.message);
+                button.textContent = 'Open in LightBurn';
+                button.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DepthForge | Generator</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;600&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+        }
+        
+        .vintage-font {
+            font-family: 'Cinzel', serif;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-200 flex flex-col items-center py-8 px-4">
+
+    <header class="w-full max-w-5xl flex justify-between items-center border-b border-gray-700 pb-4 mb-6">
+        <div class="flex items-center gap-2 md:gap-4">
+            <img src="/static/logo.png" alt="Logo" class="w-8 h-8 md:w-12 md:h-12 object-contain drop-shadow-md">
+            <h2 class="text-xl md:text-3xl vintage-font font-bold text-white tracking-wider">DepthForge</h2>
+        </div>
+        <button onclick="window.location.href='/menu'" class="text-xs md:text-sm text-gray-400 hover:text-white transition-colors border border-gray-600 px-3 py-1.5 md:px-4 md:py-2 rounded-lg bg-gray-800 hover:bg-gray-700">
+            &larr; Menu
+        </button>
+    </header>
+
+    <main class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <div class="lg:col-span-1 space-y-6">
+            <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl">
+                <h3 class="text-xl font-bold text-white mb-4">Carve Parameters</h3>
+                
+                <label class="block text-sm text-gray-400 mb-2">What do you want to carve?</label>
+                <textarea id="promptInput" rows="4" class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-gray-400 transition-colors mb-4" placeholder="e.g. A solitary pine tree on a hill..."></textarea>
+                
+                <button onclick="generateMap()" id="generateBtn" class="w-full bg-gray-200 text-gray-900 font-bold py-3 rounded-lg hover:bg-white transition-colors uppercase tracking-wider text-sm">
+                    Ignite Forge
+                </button>
+            </div>
+
+            <div class="bg-gray-900 border border-gray-700 rounded-xl p-6">
+                <h4 class="text-sm font-bold text-gray-300 uppercase tracking-widest mb-3 border-b border-gray-700 pb-2">Class Constraints</h4>
+                <ul class="text-sm text-gray-500 space-y-3">
+                    <li><strong class="text-gray-300">Size Limits:</strong> Physical output is restricted to 2x2" or 4x4" stock.</li>
+                    <li><strong class="text-gray-300">Complexity:</strong> The system automatically optimizes for bold, distinct layers. Hyper-detail will be smoothed out.</li>
+                    <li><strong class="text-gray-300">Scale:</strong> Keep concepts simple. A single object works better than a crowded landscape.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2 flex flex-col">
+            <div class="bg-gray-800 border border-gray-700 rounded-xl p-2 flex-grow flex flex-col items-center justify-center relative min-h-[400px]">
+                
+                <!-- 2D/3D View Toggle -->
+                <div id="viewToggle" class="hidden absolute top-4 right-4 z-30 bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-full p-1 flex gap-1 shadow-lg">
+                    <button id="toggle2D" onclick="switchView('2D')" class="px-4 py-1.5 rounded-full text-xs font-bold transition-all bg-white text-gray-900 shadow">2D Map</button>
+                    <button id="toggle3D" onclick="switchView('3D')" class="px-4 py-1.5 rounded-full text-xs font-bold transition-all text-gray-400 hover:text-white">3D Mesh</button>
+                </div>
+
+                <div id="placeholderText" class="text-center text-gray-500">
+                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <p class="uppercase tracking-widest text-sm">Awaiting Input Parameters</p>
+                </div>
+
+                <img id="outputImage" src="" alt="Generated Depth Map" class="hidden max-w-full max-h-full object-contain rounded drop-shadow-2xl">
+                
+                <model-viewer id="modelViewer" src="" class="hidden w-full h-full min-h-[400px]" camera-controls auto-rotate shadow-intensity="1" background-color="#121212" style="width: 100%; height: 100%; min-height: 400px;"></model-viewer>
+
+                <div id="loadingOverlay" class="hidden absolute inset-0 bg-gray-800 bg-opacity-90 flex flex-col items-center justify-center rounded-xl z-10">
+                    <svg class="animate-spin h-10 w-10 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p id="loadingText" class="text-white uppercase tracking-widest text-sm animate-pulse">Forging Map in the Cloud...</p>
+                    <p class="text-gray-400 text-xs mt-2">(This takes a few seconds)</p>
+                </div>
+
+                <div id="postProcessGraphic" class="hidden absolute inset-0 bg-gray-900 bg-opacity-95 flex flex-col items-center justify-center rounded-xl z-20 p-6 overflow-y-auto text-left">
+                    <h3 class="text-lg md:text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2 w-full max-w-lg text-center">Post-Processing Pipeline</h3>
+                    <ul id="processingSteps" class="space-y-2 md:space-y-3 w-full max-w-lg">
+                        <li id="step-1" class="opacity-20 -translate-x-4 transition-all duration-500 text-xs sm:text-sm"><strong class="text-white block mb-1">Upscaling:</strong> <span class="text-gray-400 leading-tight">It loads the standard 8-bit image (0-255 grayscale) generated by the AI and mathematically upscales it into a high-precision 16-bit space (0-65535). This gives the image the "headroom" needed for smooth math without introducing pixelation.</span></li>
+                        <li id="step-2" class="opacity-20 -translate-x-4 transition-all duration-500 text-xs sm:text-sm"><strong class="text-white block mb-1">Inpainting (Hole Fixing):</strong> <span class="text-gray-400 leading-tight">It looks for pure black pixels (missing data) and intelligently fills them in based on the surrounding pixels so that sudden drops don't cause the laser to drill a hole in your material.</span></li>
+                        <li id="step-3" class="opacity-20 -translate-x-4 transition-all duration-500 text-xs sm:text-sm"><strong class="text-white block mb-1">Bilateral & Gaussian Filtering:</strong> <span class="text-gray-400 leading-tight">It applies a heavy bilateral filter. This is the magic step that removes the "stair-stepping" or banding artifacts common in AI depth maps while keeping the sharp edges of the actual subject intact. It then adds a slight Gaussian blur to smooth out micro-textures.</span></li>
+                        <li id="step-4" class="opacity-20 -translate-x-4 transition-all duration-500 text-xs sm:text-sm"><strong class="text-white block mb-1">Normalization:</strong> <span class="text-gray-400 leading-tight">It stretches the highest peaks to pure white and the lowest valleys to pure black, ensuring you get the maximum possible contrast and physical depth from your material when laser engraving.</span></li>
+                        <li id="step-5" class="opacity-20 -translate-x-4 transition-all duration-500 text-xs sm:text-sm"><strong class="text-white block mb-1">Lossless Export:</strong> <span class="text-gray-400 leading-tight">Finally, it saves the result as a heavily compressed, lossless 16-bit PNG (forge_...png) ready to be imported into LightBurn.</span></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div id="actionBar" class="hidden mt-4 flex justify-end gap-4">
+                <button onclick="window.location.reload()" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-lg text-sm transition-colors">Discard</button>
+                
+                <button id="removeBgBtn" onclick="removeBg()" class="hidden bg-pink-600 hover:bg-pink-500 text-white font-bold px-6 py-2 rounded-lg text-sm transition-colors shadow-lg flex items-center gap-2">
+                    ✂️ Remove BG
+                </button>
+                
+                <button id="polishBtn" onclick="polishRelief()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2 rounded-lg text-sm transition-colors shadow-lg flex items-center gap-2">
+                    ✨ Polish for CNC
+                </button>
+
+                <a id="downloadBtn" href="#" download="depthforge_map.png" class="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-2 rounded-lg text-sm transition-colors shadow-lg flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Download Map
+                </a>
+
+                <button id="queueBtn" onclick="sendToQueue()" class="hidden bg-orange-600 hover:bg-orange-500 text-white font-bold px-6 py-2 rounded-lg text-sm transition-colors shadow-lg flex items-center gap-2">
+                    🔥 Send to Admin Queue
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Track the current image so the polish function knows what to target
+        let currentImageUrl = "";
+        let currentGlbUrl = "";
+
+        async function generateMap() {
+            const prompt = document.getElementById('promptInput').value;
+            if (!prompt) {
+                alert("Don't be daft, mate. Enter a prompt first.");
+                return;
+            }
+
+            // UI Prep for generation
+            document.getElementById('placeholderText').classList.add('hidden');
+            document.getElementById('outputImage').classList.add('hidden');
+            document.getElementById('modelViewer').classList.add('hidden');
+            document.getElementById('viewToggle').classList.add('hidden');
+            document.getElementById('actionBar').classList.add('hidden');
+            document.getElementById('loadingText').innerText = "Forging Map in the Cloud...";
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('generateBtn').disabled = true;
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+                
+                const data = await response.json();
+
+                if (response.ok && data.status === "success") {
+                    // Success! Store the URL and display the image
+                    currentImageUrl = data.image_url;
+                    currentGlbUrl = "";
+                    switchView('2D');
+                    
+                    document.getElementById('outputImage').src = currentImageUrl;
+                    document.getElementById('outputImage').classList.remove('hidden');
+                    document.getElementById('viewToggle').classList.remove('hidden');
+                    document.getElementById('downloadBtn').href = currentImageUrl;
+                    document.getElementById('actionBar').classList.remove('hidden');
+                    
+                    // Reset the polish button in case this is their 2nd generation
+                    const polishBtn = document.getElementById('polishBtn');
+                    polishBtn.innerHTML = '✨ Polish for CNC';
+                    polishBtn.disabled = false;
+                    polishBtn.classList.remove('hidden');
+                    polishBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+                    // Reset the removeBg button
+                    const removeBgBtn = document.getElementById('removeBgBtn');
+                    removeBgBtn.innerHTML = '✂️ Remove BG';
+                    removeBgBtn.disabled = false;
+                    removeBgBtn.classList.remove('hidden');
+                    removeBgBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    
+                    // Reset the queue button state
+                    const queueBtn = document.getElementById('queueBtn');
+                    queueBtn.classList.add('hidden');
+                    queueBtn.disabled = false;
+                    queueBtn.innerHTML = '🔥 Send to Admin Queue';
+                    queueBtn.classList.replace('bg-emerald-600', 'bg-orange-600');
+                    queueBtn.classList.replace('hover:bg-emerald-500', 'hover:bg-orange-500');
+
+                } else {
+                    throw new Error(data.error || "Server failed to forge the image.");
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert("Forge Error: " + error.message);
+                document.getElementById('placeholderText').classList.remove('hidden');
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                document.getElementById('generateBtn').disabled = false;
+            }
+        }
+
+        async function removeBg() {
+            const removeBgBtn = document.getElementById('removeBgBtn');
+            const polishBtn = document.getElementById('polishBtn');
+            
+            removeBgBtn.disabled = true;
+            removeBgBtn.innerHTML = '✂️ Removing...';
+            polishBtn.disabled = true; // Disable polish while removing bg
+
+            document.getElementById('loadingText').innerText = "Isolating Subject...";
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/remove_bg', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_url: currentImageUrl })
+                });
+                
+                const data = await response.json();
+
+                if (response.ok && data.status === "success") {
+                    currentImageUrl = data.image_url;
+                    currentGlbUrl = "";
+                    switchView('2D');
+                    
+                    document.getElementById('outputImage').src = currentImageUrl;
+                    document.getElementById('downloadBtn').href = currentImageUrl;
+                    
+                    removeBgBtn.classList.add('hidden');
+                } else {
+                    throw new Error(data.error || "Server failed to remove background.");
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert("Remove BG Error: " + error.message);
+                removeBgBtn.disabled = false;
+                removeBgBtn.innerHTML = '✂️ Remove BG';
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                polishBtn.disabled = false;
+            }
+        }
+
+        async function polishRelief() {
+            const polishBtn = document.getElementById('polishBtn');
+            const graphic = document.getElementById('postProcessGraphic');
+            const steps = [
+                document.getElementById('step-1'),
+                document.getElementById('step-2'),
+                document.getElementById('step-3'),
+                document.getElementById('step-4'),
+                document.getElementById('step-5')
+            ];
+            
+            // UI Prep for polishing
+            polishBtn.disabled = true;
+            graphic.classList.remove('hidden');
+
+            // Reset step animations
+            steps.forEach(step => {
+                step.className = 'opacity-20 -translate-x-4 transition-all duration-500 text-xs sm:text-sm';
+            });
+
+            // Start API call in the background
+            const apiPromise = fetch('/api/postprocess', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_url: currentImageUrl })
+            }).then(async res => {
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Server error");
+                return data;
+            });
+
+            try {
+                // Animation Sequence (giving ~2.5 seconds to read each step)
+                for (let i = 0; i < steps.length; i++) {
+                    if (i > 0) {
+                        steps[i - 1].className = 'opacity-50 translate-x-0 border-l-4 border-emerald-500 pl-3 py-2 transition-all duration-500 text-xs sm:text-sm';
+                    }
+                    steps[i].className = 'opacity-100 translate-x-0 bg-indigo-900/40 border-l-4 border-indigo-500 pl-3 py-2 rounded transition-all duration-500 text-xs sm:text-sm';
+                    
+                    await new Promise(r => setTimeout(r, 2500));
+                }
+                steps[steps.length - 1].className = 'opacity-50 translate-x-0 border-l-4 border-emerald-500 pl-3 py-2 transition-all duration-500 text-xs sm:text-sm';
+
+                const data = await apiPromise;
+
+                if (data.status === "success") {
+                    // Success! Swap to the smooth image
+                    currentImageUrl = data.image_url;
+                    currentGlbUrl = "";
+                    switchView('2D');
+                    
+                    document.getElementById('outputImage').src = currentImageUrl;
+                    document.getElementById('downloadBtn').href = currentImageUrl;
+
+                    // Update button to show it's done
+                    polishBtn.classList.add('hidden');
+
+                    // Show the Queue button
+                    document.getElementById('queueBtn').classList.remove('hidden');
+                } else {
+                    throw new Error(data.error || "Failed to polish the image.");
+                }
+
+            } catch (error) {
+                console.error("Polish Error:", error);
+                alert("Polish Error: " + error.message);
+                // Turn the button back on so they can try again
+                polishBtn.disabled = false;
+                polishBtn.innerHTML = '✨ Polish for CNC';
+            } finally {
+                setTimeout(() => {
+                    graphic.classList.add('hidden');
+                }, 1500);
+            }
+        }
+        async function sendToQueue() {
+            const studentName = prompt("Enter your name for the Admin Queue:");
+            if (!studentName) return; // User cancelled or entered blank
+
+            const queueBtn = document.getElementById('queueBtn');
+            queueBtn.disabled = true;
+            queueBtn.innerHTML = 'Sending to Laser...';
+
+            try {
+                // Request the server to generate the .lbrn2 file and hold it
+                const response = await fetch('/api/laser/lightburn', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        image_url: currentImageUrl,
+                        auto_open: false, // Leave it on the server for the admin
+                        student_name: studentName
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    queueBtn.innerHTML = '✔️ Sent to Admin';
+                    queueBtn.classList.replace('bg-orange-600', 'bg-emerald-600');
+                    queueBtn.classList.replace('hover:bg-orange-500', 'hover:bg-emerald-500');
+                } else {
+                    throw new Error(data.error || "Failed to send to queue.");
+                }
+
+            } catch (error) {
+                console.error("Queue Error:", error);
+                alert("Queue Error: " + error.message);
+                queueBtn.disabled = false;
+                queueBtn.innerHTML = '🔥 Send to Admin Queue';
+            }
+        }
+
+        async function switchView(mode) {
+            const toggle2D = document.getElementById('toggle2D');
+            const toggle3D = document.getElementById('toggle3D');
+            const outputImage = document.getElementById('outputImage');
+            const modelViewer = document.getElementById('modelViewer');
+            
+            if (mode === '2D') {
+                toggle2D.className = "px-4 py-1.5 rounded-full text-xs font-bold transition-all bg-white text-gray-900 shadow";
+                toggle3D.className = "px-4 py-1.5 rounded-full text-xs font-bold transition-all text-gray-400 hover:text-white";
+                
+                modelViewer.classList.add('hidden');
+                outputImage.classList.remove('hidden');
+            } else if (mode === '3D') {
+                if (!currentGlbUrl) {
+                    document.getElementById('loadingText').innerText = "Compiling 3D Mesh...";
+                    document.getElementById('loadingOverlay').classList.remove('hidden');
+                    
+                    try {
+                        const response = await fetch('/api/preview3d', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image_url: currentImageUrl })
+                        });
+                        const data = await response.json();
+                        if (response.ok && data.status === "success") {
+                            currentGlbUrl = data.glb_url;
+                            modelViewer.setAttribute('src', currentGlbUrl);
+                        } else {
+                            throw new Error(data.error || "Failed to compile 3D mesh.");
+                        }
+                    } catch (error) {
+                        console.error("3D Preview Error:", error);
+                        alert("3D Preview Error: " + error.message);
+                        switchView('2D');
+                        return;
+                    } finally {
+                        document.getElementById('loadingOverlay').classList.add('hidden');
+                    }
+                }
+                
+                toggle3D.className = "px-4 py-1.5 rounded-full text-xs font-bold transition-all bg-white text-gray-900 shadow";
+                toggle2D.className = "px-4 py-1.5 rounded-full text-xs font-bold transition-all text-gray-400 hover:text-white";
+                
+                outputImage.classList.add('hidden');
+                modelViewer.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ import sys
 import os
 import cv2
 import numpy as np
+import rembg
 
 def smooth_image(input_path, output_path):
     # ==========================================
@@ -77,6 +78,36 @@ def smooth_image(input_path, output_path):
     # Explicitly use compression parameters for maximum file safety
     cv2.imwrite(output_path, final_16bit, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
+def remove_bg(input_path, output_path):
+    print(f"Removing background from {input_path}...", flush=True)
+    img_8bit = cv2.imread(input_path, cv2.IMREAD_COLOR)
+    
+    if img_8bit is None:
+        print(f"Error: Could not load {input_path}", flush=True)
+        sys.exit(1)
+        
+    # Apply rembg
+    # rembg expects RGB or BGR image, returns RGBA
+    isolated_rgba = rembg.remove(img_8bit)
+    
+    # Extract alpha channel
+    alpha = isolated_rgba[:, :, 3]
+    
+    # Create pure black background
+    black_bg = np.zeros_like(img_8bit)
+    
+    # Composite the foreground onto the black background
+    # Normalize alpha to 0.0 - 1.0
+    alpha_float = alpha.astype(np.float32) / 255.0
+    
+    # Multiply foreground by alpha and background by (1 - alpha)
+    # Since background is 0, we just multiply foreground by alpha
+    for c in range(3):
+        black_bg[:, :, c] = (isolated_rgba[:, :, c].astype(np.float32) * alpha_float).astype(np.uint8)
+        
+    print(f"Exporting background-removed PNG to {output_path}...", flush=True)
+    cv2.imwrite(output_path, black_bg)
+
 def create_mesh(input_path, output_path):
     # Basic fallback mesh logic (creates a dummy file to satisfy server.js)
     # To implement real 3D generation, install trimesh and generate displacement here
@@ -97,6 +128,8 @@ def main():
 
     if command == "smooth":
         smooth_image(input_path, output_path)
+    elif command == "remove_bg":
+        remove_bg(input_path, output_path)
     elif command == "mesh":
         create_mesh(input_path, output_path)
     else:

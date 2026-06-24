@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightBurnProject AppVersion="1.4.00" FormatVersion="0" MaterialHeight="0" MirrorX="False" MirrorY="True">
+    <CutSetting type="Scan">
+        <index Value="0"/>
+        <name Value="C00"/>
+        <speed Value="250"/>
+        <maxPower Value="60"/>
+        <minPower Value="10"/>
+        <passes Value="1"/>
+        <interval Value="0.1"/>
+        <color Value="#000000"/>
+        <halfToning Value="2"/>
+        <isDark Value="True"/>
+        <output Value="True"/>
+    </CutSetting>
+    <Shape Type="Picture" CutIndex="0">
+        <XForm>1 0 0 1 0 0</XForm>
+        <Width Value="100"/>
+        <Height Value="100"/>
+        <ImagePath Value="C:\Users\jeff\OneDrive\Desktop\LumenForge\static\generated\forge_fd89eb0c-a.png"/>
+        <LockRatio Value="True"/>
+    </Shape>
+</LightBurnProject>

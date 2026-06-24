@@ -103,6 +103,10 @@
             <div id="actionBar" class="hidden mt-4 flex justify-end gap-4">
                 <button onclick="window.location.reload()" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-lg text-sm transition-colors">Discard</button>
                 
+                <button id="removeBgBtn" onclick="removeBg()" class="hidden bg-pink-600 hover:bg-pink-500 text-white font-bold px-6 py-2 rounded-lg text-sm transition-colors shadow-lg flex items-center gap-2">
+                    ✂️ Remove BG
+                </button>
+                
                 <button id="polishBtn" onclick="polishRelief()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2 rounded-lg text-sm transition-colors shadow-lg flex items-center gap-2">
                     ✨ Polish for CNC
                 </button>
@@ -169,6 +173,13 @@
                     polishBtn.disabled = false;
                     polishBtn.classList.remove('hidden');
                     polishBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+                    // Reset the removeBg button
+                    const removeBgBtn = document.getElementById('removeBgBtn');
+                    removeBgBtn.innerHTML = '✂️ Remove BG';
+                    removeBgBtn.disabled = false;
+                    removeBgBtn.classList.remove('hidden');
+                    removeBgBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                     
                     // Reset the queue button state
                     const queueBtn = document.getElementById('queueBtn');
@@ -189,6 +200,50 @@
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('generateBtn').disabled = false;
+            }
+        }
+
+        async function removeBg() {
+            const removeBgBtn = document.getElementById('removeBgBtn');
+            const polishBtn = document.getElementById('polishBtn');
+            
+            removeBgBtn.disabled = true;
+            removeBgBtn.innerHTML = '✂️ Removing...';
+            polishBtn.disabled = true; // Disable polish while removing bg
+
+            document.getElementById('loadingText').innerText = "Isolating Subject...";
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/remove_bg', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_url: currentImageUrl })
+                });
+                
+                const data = await response.json();
+
+                if (response.ok && data.status === "success") {
+                    currentImageUrl = data.image_url;
+                    currentGlbUrl = "";
+                    switchView('2D');
+                    
+                    document.getElementById('outputImage').src = currentImageUrl;
+                    document.getElementById('downloadBtn').href = currentImageUrl;
+                    
+                    removeBgBtn.classList.add('hidden');
+                } else {
+                    throw new Error(data.error || "Server failed to remove background.");
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert("Remove BG Error: " + error.message);
+                removeBgBtn.disabled = false;
+                removeBgBtn.innerHTML = '✂️ Remove BG';
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                polishBtn.disabled = false;
             }
         }
 
