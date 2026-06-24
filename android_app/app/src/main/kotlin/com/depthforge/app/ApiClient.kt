@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
     // Dynamic Base URL that can be customized in settings
-    var baseUrl: String = "http://10.0.2.2:8000/"
+    var baseUrl: String = "http://4.3.2.122:8000/"
 
     private val gson = GsonBuilder().create()
     

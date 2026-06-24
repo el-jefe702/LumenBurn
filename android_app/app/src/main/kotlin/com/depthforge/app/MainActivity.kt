@@ -68,7 +68,11 @@ class MainActivity : ComponentActivity() {
         prefs = getSharedPreferences("depthforge_prefs", Context.MODE_PRIVATE)
 
         // Sync Base URL with preferences
-        val savedUrl = prefs.getString("server_url", "http://10.0.2.2:8000/") ?: "http://10.0.2.2:8000/"
+        var savedUrl = prefs.getString("server_url", "http://4.3.2.122:8000/") ?: "http://4.3.2.122:8000/"
+        if (savedUrl == "http://10.0.2.2:8000/") {
+            savedUrl = "http://4.3.2.122:8000/"
+            prefs.edit().putString("server_url", savedUrl).apply()
+        }
         ApiClient.baseUrl = savedUrl
 
         setContent {
@@ -196,7 +200,7 @@ fun MainAppScaffold(prefs: SharedPreferences) {
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Emulator default is http://10.0.2.2:8000/\nPhysical device uses your LAN IP (e.g. http://192.168.1.100:8000/)",
+                            text = "Emulator default is http://10.0.2.2:8000/\nPhysical device uses your LAN IP (e.g. http://4.3.2.122:8000/)",
                             color = TextSecondary,
                             fontSize = 10.sp
                         )
@@ -211,7 +215,7 @@ fun MainAppScaffold(prefs: SharedPreferences) {
                                 userName = ""
                                 userEmail = ""
                                 premiumInterest = false
-                                ApiClient.baseUrl = "http://10.0.2.2:8000/"
+                                ApiClient.baseUrl = "http://4.3.2.122:8000/"
                                 serverUrlInput = ApiClient.baseUrl
                                 currentScreen = Screen.Landing
                                 showSettings = false
