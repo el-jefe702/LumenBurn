@@ -1,0 +1,13 @@
+node_modules/
+.venv/
+__pycache__/
+.vs/
+.vscode/
+.openmcp/
+.git/
+android_app/
+blender_plugin/
+LumenForge-main/
+*.md
+.gitignore
+.env
