@@ -130,6 +130,17 @@ npm start
 
 Open `http://localhost:8000` in your browser.
 
+### Deploy to Google Cloud Run
+A `Dockerfile` is provided to deploy the Node.js + Python stack to Google Cloud Run.
+```bash
+gcloud run deploy depthforge \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory 2Gi \
+  --set-env-vars="GEMINI_API_KEY=YOUR_API_KEY_HERE"
+```
+
 ---
 
 ## 🌐 Web API & Features
