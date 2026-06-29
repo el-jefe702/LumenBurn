@@ -27,8 +27,7 @@ RUN npm ci || npm install
 COPY requirements.txt ./
 
 # Install Python modules
-# Use --break-system-packages because this is a dedicated container environment
-RUN pip3 install --no-cache-dir -r requirements.txt --break-system-packages
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
 COPY . .

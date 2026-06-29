@@ -267,7 +267,7 @@ const processMesh = async (imageUrl, extension) => {
                     formData.append('use_blender', 'true');
                     formData.append('bake_relief', 'false');
 
-                    const response = await fetch('http://4.3.2.122:8080/process/sync', {
+                    const response = await fetch('http://127.0.0.1:8080/process/sync', {
                         method: 'POST',
                         body: formData
                     });
