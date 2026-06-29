@@ -10,6 +10,18 @@
 
 <hr />
 
+## 🚀 Executive Summary: SpatialScrap
+
+**Dynamic Material Nesting for Sustainable Fabrication**
+
+SpatialScrap is a production-grade material nesting utility engineered to bridge the critical gap between digital asset pipelines and physical workshop logistics. In modern fabrication, the inability to visualize digital designs within the jagged, irregular "negative space" of reclaimed material results in significant waste, lost time, and increased project liability.
+
+Built natively for Android XR using the Jetpack SceneCore pipeline, SpatialScrap empowers fabricators to project exact-scale, high-fidelity 3D toolpaths directly onto physical scrap in real time. By leveraging ARCore’s advanced perception layer, users can dynamically scale, rotate, and nest digital assets into un-carved boundaries, hands-free.
+
+Our commitment to sustainable, hardware-optimized architecture ensures that SpatialScrap is not restricted to high-spec workstations; it is a resource-efficient utility designed for workshop-standard compatibility. By delivering professional-grade performance across diverse computing environments, we are democratizing industrial-grade XR workflows, proving that high-tech spatial computing can—and should—be accessible to every fabricator, regardless of their hardware footprint.
+
+---
+
 ## 🌟 Overview
 
 DepthForge is built on a **resource-efficient architecture** designed for **Optimized Industrial Efficiency**. The main runtime operates as a local **Node.js + Express Edge Server** that coordinates a **Hardware-Agnostic Processing** pipeline across cloud, local APIs, and physical workshop machinery:
