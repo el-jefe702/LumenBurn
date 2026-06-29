@@ -12,12 +12,12 @@
 
 ## 🌟 Overview
 
-The main runtime operates as a local **Node.js + Express Edge Server** that coordinates a hybrid cloud, local API, and hardware workflow:
+DepthForge is built on a **resource-efficient architecture** designed for **Optimized Industrial Efficiency**. The main runtime operates as a local **Node.js + Express Edge Server** that coordinates a **Hardware-Agnostic Processing** pipeline across cloud, local APIs, and physical workshop machinery:
 
-* **Cloud AI Generation (Gemini & Imagen):** Offloads prompt expansion and initial 3D height-map generation to centralized cloud APIs.
-* **Local Edge Processing (OpenCV & Python):** Runs bilateral filtering, inpainting, and normalization locally to remove stair-stepping artifacts.
+* **Cloud AI Generation (Gemini & Imagen):** Offloads prompt expansion and initial 3D height-map generation to centralized cloud APIs, minimizing local compute requirements.
+* **Hardware-Optimized Edge Processing (OpenCV & Python):** Runs bilateral filtering, inpainting, and normalization locally to remove stair-stepping artifacts efficiently on standard workshop computers.
 * **Spatial 3D Preview (SpatialScrap API):** Transmits 16-bit depth maps to a local FastAPI-driven SpatialScrap service to compile, decimate, and export high-quality, low-latency `.glb` meshes for spatial computing environments.
-* **CNC Laser Toolpathing:** Generates native **LightBurn (.lbrn2)** project files for direct CNC laser integration.
+* **Workshop-Standard Compatibility:** Generates native **LightBurn (.lbrn2)** project files to guarantee broad compatibility and direct CNC laser integration across different hardware stacks.
 * **Local Web UI & API Hub:** Renders the web interface and exposes API endpoints for student submission queues and hardware controls.
 
 ---
