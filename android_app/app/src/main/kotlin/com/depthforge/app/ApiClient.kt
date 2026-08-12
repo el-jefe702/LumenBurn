@@ -1,140 +1,86 @@
 package com.depthforge.app
 
-import com.google.gson.GsonBuilder
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.TimeUnit
+import org.json.JSONObject
+import java.io.File
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
 object ApiClient {
-    // Dynamic Base URL that can be customized in settings
-    var baseUrl: String = "http://4.3.2.122:8000/"
+    var baseUrl = "http://4.3.2.122:8000/"
 
-    private val gson = GsonBuilder().create()
-    
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
-
-    private suspend fun postJson(path: String, body: Map<String, Any>): Map<String, Any> = withContext(Dispatchers.IO) {
-        val payload = gson.toJson(body)
-        val fullUrl = baseUrl.removeSuffix("/") + "/" + path.removePrefix("/")
-        val req = Request.Builder()
-            .url(fullUrl)
-            .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
-            .build()
-        
-        http.newCall(req).execute().use { resp ->
-            val bodyText = resp.body?.string() ?: ""
-            if (!resp.isSuccessful) {
-                throw Exception("Request failed (${resp.code}): $bodyText")
-            }
-            if (bodyText.isBlank()) throw Exception("Empty response")
-            return@withContext gson.fromJson(bodyText, Map::class.java) as Map<String, Any>
-        }
+    private fun apiUrl(path: String): String {
+        return baseUrl.removeSuffix("/") + path
     }
 
-    private suspend fun getJson(path: String): Any = withContext(Dispatchers.IO) {
-        val fullUrl = baseUrl.removeSuffix("/") + "/" + path.removePrefix("/")
-        val req = Request.Builder()
-            .url(fullUrl)
-            .get()
-            .build()
-        
-        http.newCall(req).execute().use { resp ->
-            val bodyText = resp.body?.string() ?: ""
-            if (!resp.isSuccessful) {
-                throw Exception("GET failed (${resp.code}): $bodyText")
-            }
-            if (bodyText.isBlank()) throw Exception("Empty response")
-            return@withContext gson.fromJson(bodyText, Any::class.java)
-        }
+    // POST JSON, return parsed JSONObject
+    private suspend fun postJson(path: String, body: JSONObject): JSONObject = withContext(Dispatchers.IO) {
+        val conn = URL(apiUrl(path)).openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.doOutput = true
+        conn.connectTimeout = 60000
+        conn.readTimeout = 120000
+        OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+        val responseText = conn.inputStream.bufferedReader().readText()
+        JSONObject(responseText)
     }
 
-    // --- Core Functions ---
+    // POST multipart file
+    private suspend fun postMultipart(path: String, file: File, fieldName: String): JSONObject = withContext(Dispatchers.IO) {
+        val boundary = "---DepthForge${System.currentTimeMillis()}---"
+        val conn = URL(apiUrl(path)).openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+        conn.doOutput = true
+        conn.connectTimeout = 60000
+        conn.readTimeout = 180000
 
-    suspend fun generate(prompt: String): Map<String, Any> = postJson("api/generate", mapOf("prompt" to prompt))
-
-    suspend fun postprocess(imageUrl: String): Map<String, Any> = postJson("api/postprocess", mapOf("image_url" to imageUrl))
-
-    suspend fun preview3d(imageUrl: String): Map<String, Any> = postJson("api/preview3d", mapOf("image_url" to imageUrl))
-
-    // --- Laser Admin Queue Functions ---
-
-    suspend fun sendToAdminQueue(imageUrl: String, studentName: String): Map<String, Any> =
-        postJson("api/laser/lightburn", mapOf("image_url" to imageUrl, "student_name" to studentName, "auto_open" to false))
-
-    suspend fun openInLightburn(imageUrl: String): Map<String, Any> =
-        postJson("api/laser/lightburn", mapOf("image_url" to imageUrl, "auto_open" to true))
-
-    suspend fun getQueue(): List<Map<String, Any>> = withContext(Dispatchers.IO) {
-        val data = getJson("api/admin/queue")
-        return@withContext data as? List<Map<String, Any>> ?: emptyList()
-    }
-
-    // --- Lead Submission ---
-
-    suspend fun submitLead(name: String, email: String, premiumInterest: Boolean): Map<String, Any> =
-        postJson("api/lead", mapOf("name" to name, "email" to email, "premium_interest" to premiumInterest))
-
-    suspend fun getLeads(): List<Map<String, Any>> = withContext(Dispatchers.IO) {
-        val data = getJson("api/admin/leads")
-        return@withContext data as? List<Map<String, Any>> ?: emptyList()
-    }
-
-    // --- Direct Laser Control (Ruida Scaffold) ---
-
-    suspend fun prepareLaser(imageUrl: String): String = withContext(Dispatchers.IO) {
-        val response = postJson("api/laser/prepare", mapOf("image_url" to imageUrl))
-        return@withContext response["jobId"] as? String ?: throw Exception("Missing jobId")
-    }
-
-    suspend fun launchLaser(jobId: String, safetyConfirmed: Boolean): Map<String, Any> =
-        postJson("api/laser/launch", mapOf("jobId" to jobId, "safetyConfirmed" to safetyConfirmed))
-
-    suspend fun getStatus(jobId: String): Map<String, Any> = withContext(Dispatchers.IO) {
-        val fullUrl = baseUrl.removeSuffix("/") + "/api/laser/status/" + jobId
-        val req = Request.Builder()
-            .url(fullUrl)
-            .get()
-            .build()
-        http.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw Exception("Status failed (${resp.code})")
-            val body = resp.body?.string() ?: throw Exception("Empty response")
-            return@withContext gson.fromJson(body, Map::class.java) as Map<String, Any>
-        }
-    }
-
-    // --- Chat Support ---
-
-    suspend fun chat(message: String, sessionId: String): Map<String, Any> =
-        postJson("api/chat", mapOf("message" to message, "sessionId" to sessionId))
-
-    // --- Helper to Download Image Bytes ---
-
-    suspend fun downloadImage(url: String): ByteArray? = withContext(Dispatchers.IO) {
-        var targetUrl = url.trim()
-        // If the server returns localhost/127.0.0.1, we must translate it for the emulator/device
-        if (targetUrl.contains("://localhost") || targetUrl.contains("://127.0.0.1")) {
-            val baseHost = baseUrl.substringAfter("://").substringBefore("/")
-            targetUrl = targetUrl
-                .replace("localhost", baseHost.substringBefore(":"))
-                .replace("127.0.0.1", baseHost.substringBefore(":"))
+        conn.outputStream.bufferedWriter().use { writer ->
+            writer.write("--$boundary\r\n")
+            writer.write("Content-Disposition: form-data; name=\"$fieldName\"; filename=\"${file.name}\"\r\n")
+            writer.write("Content-Type: image/jpeg\r\n\r\n")
+            writer.flush()
+            file.inputStream().use { it.copyTo(conn.outputStream) }
+            conn.outputStream.flush()
+            writer.write("\r\n--$boundary--\r\n")
         }
 
-        val fullUrl = if (targetUrl.startsWith("http")) targetUrl else baseUrl.removeSuffix("/") + "/" + targetUrl.removePrefix("/")
-        val req = Request.Builder().url(fullUrl).build()
+        val responseText = conn.inputStream.bufferedReader().readText()
+        JSONObject(responseText)
+    }
+
+    // Download image as Bitmap
+    suspend fun downloadImage(urlPath: String): Bitmap? = withContext(Dispatchers.IO) {
         try {
-            http.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext null
-                return@withContext resp.body?.bytes()
-            }
-        } catch (e: Exception) {
-            return@withContext null
-        }
+            val fullUrl = if (urlPath.startsWith("http")) urlPath
+                          else apiUrl(urlPath)
+            val stream = URL(fullUrl).openStream()
+            BitmapFactory.decodeStream(stream)
+        } catch (e: Exception) { null }
+    }
+
+    // Generate depth map from text prompt
+    suspend fun generate(prompt: String): JSONObject {
+        return postJson("/api/generate", JSONObject().put("prompt", prompt))
+    }
+
+    // Post-process (polish/smooth) an image
+    suspend fun postprocess(imageUrl: String): JSONObject {
+        return postJson("/api/postprocess", JSONObject().put("image_url", imageUrl))
+    }
+
+    // Remove background
+    suspend fun removeBg(imageUrl: String): JSONObject {
+        return postJson("/api/remove_bg", JSONObject().put("image_url", imageUrl))
+    }
+
+    // Convert photo to depth map
+    suspend fun photoToDepth(file: File): JSONObject {
+        return postMultipart("/api/photo-to-depth", file, "photo")
     }
 }

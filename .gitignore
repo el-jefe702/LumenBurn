@@ -10,6 +10,7 @@ venv/
 
 # Android
 android_app/.gradle/
+android_app/.kotlin/
 android_app/build/
 android_app/app/build/
 android_app/local.properties
@@ -22,6 +23,7 @@ data/
 # OS Files
 .DS_Store
 Thumbs.db
+
 # IDEs & Profiling
 .vs/
 .vscode/
@@ -30,4 +32,3 @@ Thumbs.db
 *.slnx.sqlite
 *.vsidx
 .idea/
-

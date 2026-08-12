@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DepthForge | 3D Relief Generator</title>
+    <meta name="description" content="Generate flawless 16-bit 3D relief depth maps for CNC laser engraving. AI-powered depth map creation and post-processing.">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <h1>
+            <img src="/static/logo.png" alt="Logo">
+            <span class="vintage-font">DepthForge</span>
+        </h1>
+        <span style="color: var(--text-muted); font-size: 14px;">v2.0</span>
+    </header>
+
+    <main class="main-grid">
+        <div class="card fade-in">
+            <h2 style="margin-top:0; font-size: 18px; margin-bottom: 20px;">Carve Parameters</h2>
+            
+            <div class="tab-toggle">
+                <button class="tab-btn active" onclick="switchMode('text')" id="tabText">✏️ Text Prompt</button>
+                <button class="tab-btn" onclick="switchMode('photo')" id="tabPhoto">📷 Upload Photo</button>
+            </div>
+
+            <!-- Text Panel -->
+            <div id="textPanel">
+                <textarea id="promptInput" placeholder="Describe the intricate 3D relief carving you want to generate..."></textarea>
+                <button class="btn btn-primary" id="generateBtn" onclick="generateMap()">Ignite Forge</button>
+            </div>
+
+            <!-- Photo Panel -->
+            <div id="photoPanel" style="display: none;">
+                <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                    <div id="dropText">Drag & drop photo here or click to browse</div>
+                    <input type="file" id="fileInput" accept="image/png, image/jpeg, image/webp" style="display:none" onchange="handleFileSelect(event)">
+                    <img id="photoPreviewImg" class="photo-preview" alt="Preview">
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 16px;">
+                    <button class="btn btn-secondary" id="convertBtn" onclick="convertPhoto()" disabled>🔬 Convert to Depth Map</button>
+                    <button class="btn btn-outline" id="clearPhotoBtn" onclick="clearPhoto()" style="display: none;">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="preview-area fade-in">
+                <div class="preview-placeholder" id="placeholder">
+                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M19,3H5C3.895,3,3,3.895,3,5v14c0,1.105,0.895,2,2,2h14c1.105,0,2-0.895,2-2V5C21,3.895,20.105,3,19,3z M19,19H5V5h14V19z"/><path d="M13.5,13.5l-3-4l-4,5h11L13.5,13.5z"/></svg>
+                    <span>Your depth map will appear here</span>
+                </div>
+                
+                <img id="outputImage" class="output-image" alt="Depth Map" style="display: none;">
+                
+                <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                    <div class="spinner"></div>
+                    <div class="loading-text" id="loadingText">Forging Map in the Cloud...</div>
+                </div>
+
+                <div class="pipeline-overlay" id="pipelineOverlay" style="display: none;">
+                    <div class="pipeline-step" id="step1">1. Upscaling (8-bit to 16-bit)</div>
+                    <div class="pipeline-step" id="step2">2. Inpainting (Hole fixing)</div>
+                    <div class="pipeline-step" id="step3">3. Bilateral & Gaussian Filtering (Banding removal)</div>
+                    <div class="pipeline-step" id="step4">4. Normalization (Depth range stretching)</div>
+                    <div class="pipeline-step" id="step5">5. Lossless Export (16-bit PNG)</div>
+                </div>
+            </div>
+
+            <div class="action-bar fade-in" id="actionBar" style="display: none;">
+                <button class="btn btn-outline" onclick="location.reload()">Discard</button>
+                <button class="btn btn-action pink" id="removeBgBtn" onclick="removeBg()">✂️ Remove BG</button>
+                <button class="btn btn-action indigo" id="polishBtn" onclick="polishRelief()">✨ Polish for CNC</button>
+                <a class="btn btn-action green" id="downloadBtn" download="depth_map.png">Download Map</a>
+            </div>
+        </div>
+    </main>
+
+    <footer style="text-align: center; color: var(--text-muted); font-size: 12px; margin-bottom: 24px;">
+        SLCreations, LLC &copy; 2026
+    </footer>
+
+    <script>
+        let currentImageUrl = '';
+        let currentMode = 'text';
+        let selectedPhotoFile = null;
+
+        // Drop zone logic
+        const dropZone = document.getElementById('dropZone');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+            dropZone.addEventListener(evt, e => e.preventDefault());
+            dropZone.addEventListener(evt, e => e.stopPropagation());
+        });
+        dropZone.addEventListener('dragover', () => dropZone.classList.add('dragover'));
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', handlePhotoDrop);
+
+        function switchMode(mode) {
+            currentMode = mode;
+            document.getElementById('tabText').classList.toggle('active', mode === 'text');
+            document.getElementById('tabPhoto').classList.toggle('active', mode === 'photo');
+            document.getElementById('textPanel').style.display = mode === 'text' ? 'block' : 'none';
+            document.getElementById('photoPanel').style.display = mode === 'photo' ? 'block' : 'none';
+        }
+
+        function handlePhotoDrop(e) {
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handlePhotoSelect(e.dataTransfer.files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files && e.target.files.length > 0) {
+                handlePhotoSelect(e.target.files[0]);
+            }
+        }
+
+        function handlePhotoSelect(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file.');
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                alert('File is too large. Max 10MB allowed.');
+                return;
+            }
+            selectedPhotoFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('photoPreviewImg').src = e.target.result;
+                document.getElementById('photoPreviewImg').style.display = 'block';
+                document.getElementById('dropText').style.display = 'none';
+                document.getElementById('convertBtn').disabled = false;
+                document.getElementById('clearPhotoBtn').style.display = 'inline-flex';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearPhoto() {
+            selectedPhotoFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('photoPreviewImg').style.display = 'none';
+            document.getElementById('dropText').style.display = 'block';
+            document.getElementById('convertBtn').disabled = true;
+            document.getElementById('clearPhotoBtn').style.display = 'none';
+        }
+
+        function displayImageSuccess(imageUrl) {
+            currentImageUrl = imageUrl;
+            const outputImage = document.getElementById('outputImage');
+            outputImage.src = imageUrl;
+            outputImage.style.display = 'block';
+            document.getElementById('placeholder').style.display = 'none';
+            document.getElementById('actionBar').style.display = 'flex';
+            document.getElementById('downloadBtn').href = imageUrl;
+            document.getElementById('removeBgBtn').disabled = false;
+            document.getElementById('polishBtn').disabled = false;
+            document.getElementById('removeBgBtn').style.display = 'inline-flex';
+            document.getElementById('polishBtn').style.display = 'inline-flex';
+        }
+
+        async function generateMap() {
+            const prompt = document.getElementById('promptInput').value.trim();
+            if (!prompt) {
+                alert('Please enter a description for your depth map.');
+                return;
+            }
+
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            document.getElementById('loadingText').innerText = 'Forging Map in the Cloud...';
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('outputImage').style.display = 'none';
+            document.getElementById('placeholder').style.display = 'none';
+
+            try {
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Generation failed');
+                
+                displayImageSuccess(data.image_url);
+            } catch (err) {
+                alert(err.message);
+                document.getElementById('placeholder').style.display = 'flex';
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                btn.disabled = false;
+            }
+        }
+
+        async function convertPhoto() {
+            if (!selectedPhotoFile) return;
+
+            const btn = document.getElementById('convertBtn');
+            btn.disabled = true;
+            document.getElementById('loadingText').innerText = '🔬 Analyzing depth structure...';
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('outputImage').style.display = 'none';
+            document.getElementById('placeholder').style.display = 'none';
+
+            const timeoutId = setTimeout(() => {
+                document.getElementById('loadingText').innerText = '🎨 Generating depth map...';
+            }, 4000);
+
+            try {
+                const formData = new FormData();
+                formData.append('photo', selectedPhotoFile);
+
+                const res = await fetch('/api/photo-to-depth', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Conversion failed');
+                
+                displayImageSuccess(data.image_url);
+            } catch (err) {
+                alert(err.message);
+                document.getElementById('placeholder').style.display = 'flex';
+            } finally {
+                clearTimeout(timeoutId);
+                document.getElementById('loadingOverlay').style.display = 'none';
+                btn.disabled = false;
+            }
+        }
+
+        async function removeBg() {
+            const btn = document.getElementById('removeBgBtn');
+            const polishBtn = document.getElementById('polishBtn');
+            btn.disabled = true;
+            polishBtn.disabled = true;
+            
+            document.getElementById('loadingText').innerText = 'Isolating Subject...';
+            document.getElementById('loadingOverlay').style.display = 'flex';
+
+            try {
+                const res = await fetch('/api/remove_bg', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_url: currentImageUrl })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Remove BG failed');
+                
+                currentImageUrl = data.image_url;
+                document.getElementById('outputImage').src = currentImageUrl;
+                document.getElementById('downloadBtn').href = currentImageUrl;
+                btn.style.display = 'none';
+            } catch (err) {
+                alert(err.message);
+                btn.disabled = false;
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                polishBtn.disabled = false;
+            }
+        }
+
+        async function polishRelief() {
+            const btn = document.getElementById('polishBtn');
+            btn.disabled = true;
+
+            const overlay = document.getElementById('pipelineOverlay');
+            overlay.style.display = 'flex';
+
+            // Reset steps
+            for (let i = 1; i <= 5; i++) {
+                document.getElementById('step' + i).className = 'pipeline-step';
+            }
+
+            const apiPromise = fetch('/api/postprocess', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_url: currentImageUrl })
+            }).then(r => r.json());
+
+            // Animation sequence
+            for (let i = 1; i <= 5; i++) {
+                const step = document.getElementById('step' + i);
+                step.classList.add('active');
+                if (i > 1) {
+                    document.getElementById('step' + (i - 1)).classList.remove('active');
+                    document.getElementById('step' + (i - 1)).classList.add('done');
+                }
+                await new Promise(r => setTimeout(r, 2500));
+            }
+            document.getElementById('step5').classList.remove('active');
+            document.getElementById('step5').classList.add('done');
+
+            try {
+                const data = await apiPromise;
+                if (data.error) throw new Error(data.error);
+
+                currentImageUrl = data.image_url;
+                document.getElementById('outputImage').src = currentImageUrl;
+                document.getElementById('downloadBtn').href = currentImageUrl;
+                btn.style.display = 'none';
+            } catch (err) {
+                alert('Polishing encountered an issue, but original is kept. ' + err.message);
+            } finally {
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                }, 1500);
+            }
+        }
+    </script>
+</body>
+</html>
