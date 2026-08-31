@@ -162,8 +162,9 @@ app.post('/api/generate', async (req, res) => {
 });
 
 app.post('/api/postprocess', async (req, res) => {
-    const filename = path.basename(req.body.image_url || "");
-    if (!filename) return res.status(400).json({ error: 'Missing image_url.' });
+    const rawUrl = typeof req.body?.image_url === 'string' ? req.body.image_url.trim() : '';
+    const filename = path.basename(rawUrl);
+    if (!rawUrl || !filename) return res.status(400).json({ error: 'Missing image_url.' });
     const inputPath = path.join(generatedDir, filename);
     if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'Image not found on server.' });
     try {
@@ -177,8 +178,9 @@ app.post('/api/postprocess', async (req, res) => {
 });
 
 app.post('/api/remove_bg', async (req, res) => {
-    const filename = path.basename(req.body.image_url || "");
-    if (!filename) return res.status(400).json({ error: 'Missing image_url.' });
+    const rawUrl = typeof req.body?.image_url === 'string' ? req.body.image_url.trim() : '';
+    const filename = path.basename(rawUrl);
+    if (!rawUrl || !filename) return res.status(400).json({ error: 'Missing image_url.' });
     const inputPath = path.join(generatedDir, filename);
     if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'Image not found on server.' });
     try {
@@ -188,6 +190,22 @@ app.post('/api/remove_bg', async (req, res) => {
     } catch (error) {
         console.error("Python remove_bg failed, bypassing:", error.message);
 
+        res.json({ status: "success", image_url: `/static/generated/${filename}` });
+    }
+});
+
+app.post('/api/invert', async (req, res) => {
+    const rawUrl = typeof req.body?.image_url === 'string' ? req.body.image_url.trim() : '';
+    const filename = path.basename(rawUrl);
+    if (!rawUrl || !filename) return res.status(400).json({ error: 'Missing image_url.' });
+    const inputPath = path.join(generatedDir, filename);
+    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'Image not found on server.' });
+    try {
+        const outputPath = path.join(generatedDir, `inv_${filename}`);
+        await runPythonProcessor('invert', [inputPath, outputPath]);
+        res.json({ status: "success", image_url: `/static/generated/inv_${filename}` });
+    } catch (error) {
+        console.error("Python invert failed, bypassing:", error.message);
         res.json({ status: "success", image_url: `/static/generated/${filename}` });
     }
 });

@@ -91,6 +91,7 @@
 
             <div class="action-bar fade-in" id="actionBar" style="display: none;">
                 <button class="btn btn-outline" onclick="location.reload()">Discard</button>
+                <button class="btn btn-action orange" id="invertBtn" onclick="invertDepthMap()">🔄 Invert</button>
                 <button class="btn btn-action pink" id="removeBgBtn" onclick="removeBg()">✂️ Remove BG</button>
                 <button class="btn btn-action indigo" id="polishBtn" onclick="polishRelief()">✨ Polish for CNC</button>
                 <a class="btn btn-action green" id="downloadBtn" download="depth_map.png">Download Map</a>
@@ -178,8 +179,10 @@
             document.getElementById('downloadBtn').href = imageUrl;
             document.getElementById('removeBgBtn').disabled = false;
             document.getElementById('polishBtn').disabled = false;
+            document.getElementById('invertBtn').disabled = false;
             document.getElementById('removeBgBtn').style.display = 'inline-flex';
             document.getElementById('polishBtn').style.display = 'inline-flex';
+            document.getElementById('invertBtn').style.display = 'inline-flex';
         }
 
         async function generateMap() {
@@ -259,8 +262,10 @@
         async function removeBg() {
             const btn = document.getElementById('removeBgBtn');
             const polishBtn = document.getElementById('polishBtn');
+            const invertBtn = document.getElementById('invertBtn');
             btn.disabled = true;
-            polishBtn.disabled = true;
+            if (polishBtn) polishBtn.disabled = true;
+            if (invertBtn) invertBtn.disabled = true;
             
             document.getElementById('loadingText').innerText = 'Isolating Subject...';
             document.getElementById('loadingOverlay').style.display = 'flex';
@@ -283,13 +288,51 @@
                 btn.disabled = false;
             } finally {
                 document.getElementById('loadingOverlay').style.display = 'none';
-                polishBtn.disabled = false;
+                if (polishBtn) polishBtn.disabled = false;
+                if (invertBtn) invertBtn.disabled = false;
+            }
+        }
+
+        async function invertDepthMap() {
+            const btn = document.getElementById('invertBtn');
+            const removeBgBtn = document.getElementById('removeBgBtn');
+            const polishBtn = document.getElementById('polishBtn');
+            btn.disabled = true;
+            if (removeBgBtn) removeBgBtn.disabled = true;
+            if (polishBtn) polishBtn.disabled = true;
+
+            document.getElementById('loadingText').innerText = 'Inverting Depth Map...';
+            document.getElementById('loadingOverlay').style.display = 'flex';
+
+            try {
+                const res = await fetch('/api/invert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_url: currentImageUrl })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Invert failed');
+
+                currentImageUrl = data.image_url;
+                document.getElementById('outputImage').src = currentImageUrl;
+                document.getElementById('downloadBtn').href = currentImageUrl;
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                btn.disabled = false;
+                if (removeBgBtn) removeBgBtn.disabled = false;
+                if (polishBtn) polishBtn.disabled = false;
             }
         }
 
         async function polishRelief() {
             const btn = document.getElementById('polishBtn');
+            const invertBtn = document.getElementById('invertBtn');
+            const removeBgBtn = document.getElementById('removeBgBtn');
             btn.disabled = true;
+            if (invertBtn) invertBtn.disabled = true;
+            if (removeBgBtn) removeBgBtn.disabled = true;
 
             const overlay = document.getElementById('pipelineOverlay');
             overlay.style.display = 'flex';
@@ -332,6 +375,8 @@
                 setTimeout(() => {
                     overlay.style.display = 'none';
                 }, 1500);
+                if (invertBtn) invertBtn.disabled = false;
+                if (removeBgBtn) removeBgBtn.disabled = false;
             }
         }
     </script>

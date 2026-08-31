@@ -44,5 +44,7 @@ class AspectRatioTest {
 
         assertNotNull("ApiClient must declare generate method", generateMethod)
         assertNotNull("ApiClient must declare photoToDepth method", photoToDepthMethod)
+        val invertMethod = methods.find { it.name.startsWith("invert") }
+        assertNotNull("ApiClient must declare invert method", invertMethod)
     }
 }

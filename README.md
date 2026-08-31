@@ -19,14 +19,15 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 - **Text-to-Depth**: Describe what you want to carve → AI generates a 16-bit height map
 - **Photo-to-Depth**: Upload a photo → Gemini Vision analyzes spatial structure → generates matching depth map
 - **Aspect Ratio Selector**: Choose from `1:1` (default), `4:3`, `3:2`, `16:9`, or `2:3` for both text prompt and photo-to-depth modes
+- **Invert Depth Map**: Invert depth values (`65535 - pixel` for 16-bit, `255 - pixel` for 8-bit) to switch between convex/concave reliefs
 - **Post-Processing Pipeline**: 5-stage OpenCV pipeline (16-bit upscaling → inpainting → bilateral filtering → normalization → lossless export)
 - **Background Removal**: Isolate subjects onto pure black backgrounds with `rembg`
 - **Download**: Export production-ready 16-bit PNG depth maps
 
 ### Platforms
 
-- **Web**: Single-page static frontend served from Express with built-in aspect ratio selector
-- **Android**: Native Jetpack Compose app (single-screen forge with native aspect ratio chips)
+- **Web**: Single-page static frontend served from Express with built-in aspect ratio selector and action controls
+- **Android**: Native Jetpack Compose app (single-screen forge with native aspect ratio chips and action controls)
 
 ---
 
@@ -44,16 +45,18 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 │                                                                  │
 │  POST /api/generate        → Gemini + Imagen 4 (aspectRatio)     │
 │  POST /api/photo-to-depth  → Gemini Vision + Imagen 4 (ratio)    │
-│  POST /api/postprocess     → spawns processor.py smooth           │
-│  POST /api/remove_bg       → spawns processor.py remove_bg        │
+│  POST /api/invert          → spawns processor.py invert          │
+│  POST /api/postprocess     → spawns processor.py smooth          │
+│  POST /api/remove_bg       → spawns processor.py remove_bg       │
 └───────────────────────────────┬──────────────────────────────────┘
                                 │ child_process.spawn
                                 ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Python Processor (processor.py)                                 │
 │                                                                  │
+│  invert:     pixel inversion (65535 - pixel / 255 - pixel)       │
 │  smooth:     8→16bit upscale → inpaint → bilateral → normalize   │
-│  remove_bg:  rembg foreground isolation → black background        │
+│  remove_bg:  rembg foreground isolation → black background       │
 │  export:     16-bit PNG depth map                                │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -105,6 +108,7 @@ npm test       # Run automated unit & integration test suite
 |---|---|---|---|---|
 | `/api/generate` | POST | `{"prompt": "...", "aspectRatio": "1:1"}` | `{"status": "success", "image_url": "/static/generated/xxx.png"}` | Generates depth map from text prompt. `aspectRatio` defaults to `1:1` (`1:1`, `4:3`, `3:2`, `16:9`, `2:3`). |
 | `/api/photo-to-depth` | POST | Multipart `photo` file, optional `aspectRatio` | `{"status": "success", "image_url": "...", "subject": "..."}` | Analyzes photo and generates depth map with requested aspect ratio. |
+| `/api/invert` | POST | `{"image_url": "..."}` | `{"status": "success", "image_url": "/static/generated/inv_xxx.png"}` | Inverts depth map pixel values (16-bit or 8-bit). |
 | `/api/postprocess` | POST | `{"image_url": "..."}` | `{"status": "success", "image_url": "/static/generated/forge_xxx.png"}` | Applies 5-stage OpenCV smoothing pipeline. |
 | `/api/remove_bg` | POST | `{"image_url": "..."}` | `{"status": "success", "image_url": "/static/generated/iso_xxx.png"}` | Isolates subject onto pure black background. |
 

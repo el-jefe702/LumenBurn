@@ -2,22 +2,31 @@ import sys
 import os
 import cv2
 import numpy as np
-import rembg
 
 def smooth_image(input_path, output_path):
     # ==========================================
     # STEP 1: LOAD & CONVERT TO 16-BIT GRAYSCALE
     # ==========================================
     print("Loading image and converting to 16-bit grayscale...", flush=True)
-    img_8bit = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
+    raw_img = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
 
-    if img_8bit is None:
+    if raw_img is None:
         print(f"Error: Could not load {input_path}", flush=True)
         sys.exit(1)
 
-    # Upscale from 8-bit (0-255) to 16-bit (0-65535)
-    # Multiplying by 257 correctly maps 255 to 65535
-    img_16bit = (img_8bit.astype(np.uint32) * 257).astype(np.uint16)
+    if raw_img.dtype == np.uint16:
+        if len(raw_img.shape) == 3:
+            img_16bit = cv2.cvtColor(raw_img, cv2.COLOR_BGR2GRAY if raw_img.shape[2] == 3 else cv2.COLOR_BGRA2GRAY)
+        else:
+            img_16bit = raw_img
+    else:
+        if len(raw_img.shape) == 3:
+            img_8bit = cv2.cvtColor(raw_img, cv2.COLOR_BGR2GRAY if raw_img.shape[2] == 3 else cv2.COLOR_BGRA2GRAY)
+        else:
+            img_8bit = raw_img
+        # Upscale from 8-bit (0-255) to 16-bit (0-65535)
+        # Multiplying by 257 correctly maps 255 to 65535
+        img_16bit = (img_8bit.astype(np.uint32) * 257).astype(np.uint16)
 
     # ==========================================
     # STEP 4: CLEAN UP MISSING DATA (INPAINTING)
@@ -86,6 +95,7 @@ def smooth_image(input_path, output_path):
 
 def remove_bg(input_path, output_path):
     print(f"Removing background from {input_path}...", flush=True)
+    import rembg
     img_8bit = cv2.imread(input_path, cv2.IMREAD_COLOR)
     
     if img_8bit is None:
@@ -114,6 +124,42 @@ def remove_bg(input_path, output_path):
     print(f"Exporting background-removed PNG to {output_path}...", flush=True)
     cv2.imwrite(output_path, black_bg)
 
+def invert_image(input_path, output_path):
+    print(f"Inverting depth map from {input_path}...", flush=True)
+    img = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
+    
+    if img is None:
+        print(f"Error: Could not load {input_path}", flush=True)
+        sys.exit(1)
+        
+    if img.dtype == np.uint16:
+        # Invert 16-bit depth map: 65535 - pixel
+        if len(img.shape) == 3 and img.shape[2] == 4:
+            inverted = img.copy()
+            inverted[:, :, :3] = (65535 - img[:, :, :3].astype(np.uint32)).astype(np.uint16)
+        else:
+            inverted = (65535 - img.astype(np.uint32)).astype(np.uint16)
+        cv2.imwrite(output_path, inverted, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+    elif img.dtype == np.uint8:
+        # Invert 8-bit depth map: 255 - pixel
+        if len(img.shape) == 3 and img.shape[2] == 4:
+            inverted = img.copy()
+            inverted[:, :, :3] = (255 - img[:, :, :3].astype(np.uint16)).astype(np.uint8)
+        else:
+            inverted = (255 - img.astype(np.uint16)).astype(np.uint8)
+        cv2.imwrite(output_path, inverted)
+    else:
+        # Fallback for other dtypes
+        max_val = np.iinfo(img.dtype).max if np.issubdtype(img.dtype, np.integer) else 1.0
+        if len(img.shape) == 3 and img.shape[2] == 4:
+            inverted = img.copy()
+            inverted[:, :, :3] = (max_val - img[:, :, :3]).astype(img.dtype)
+        else:
+            inverted = (max_val - img).astype(img.dtype)
+        cv2.imwrite(output_path, inverted)
+        
+    print(f"Exporting inverted depth map to {output_path}...", flush=True)
+
 def create_mesh(input_path, output_path):
     print("Error: 3D mesh generation is not yet implemented.", flush=True)
     print("To enable this, install 'trimesh' and implement displacement mesh generation here.", flush=True)
@@ -132,6 +178,8 @@ def main():
         smooth_image(input_path, output_path)
     elif command == "remove_bg":
         remove_bg(input_path, output_path)
+    elif command == "invert":
+        invert_image(input_path, output_path)
     elif command == "mesh":
         create_mesh(input_path, output_path)
     else:

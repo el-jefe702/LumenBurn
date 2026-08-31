@@ -53,6 +53,7 @@ val GoldAccent = Color(0xFFD4AF37)
 val IndigoAccent = Color(0xFF6366F1)
 val EmeraldAccent = Color(0xFF10B981)
 val PinkAccent = Color(0xFFEC4899)
+val OrangeAccent = Color(0xFFFF6B35)
 val GrayBorder = Color(0xFF2A2A3A)
 
 @Composable
@@ -197,6 +198,7 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
     var isPolished by remember { mutableStateOf(false) }
     var isRemovingBg by remember { mutableStateOf(false) }
     var bgRemoved by remember { mutableStateOf(false) }
+    var isInverting by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
     var activePolishStep by remember { mutableStateOf(-1) }
     
@@ -409,6 +411,13 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                                 Text("Forging Map in the Cloud...", color = TextPrimary)
                             }
                         }
+                        isInverting -> {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = OrangeAccent)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("Inverting Depth Map...", color = TextPrimary)
+                            }
+                        }
                         isPolishing -> {
                             // Pipeline step animation overlay
                             Column(
@@ -481,9 +490,36 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                                 bgRemoved = false
                                 promptInput = ""
                             },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                            enabled = !isInverting && !isRemovingBg
                         ) {
                             Text("Discard")
+                        }
+
+                        Button(
+                            onClick = {
+                                isInverting = true
+                                lastError = null
+                                coroutineScope.launch {
+                                    try {
+                                        val res = ApiClient.invert(currentImageUrl)
+                                        if (res.optString("status") == "success") {
+                                            currentImageUrl = res.getString("image_url")
+                                            currentBitmap = ApiClient.downloadImage(currentImageUrl)
+                                        } else {
+                                            lastError = "Invert failed"
+                                        }
+                                    } catch (e: Exception) {
+                                        lastError = e.message ?: "Invert failed"
+                                    } finally {
+                                        isInverting = false
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(backgroundColor = OrangeAccent),
+                            enabled = !isInverting && !isRemovingBg
+                        ) {
+                            Text(if (isInverting) "Inverting..." else "Invert")
                         }
 
                         if (!bgRemoved) {
@@ -505,7 +541,8 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                                         }
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(backgroundColor = PinkAccent)
+                                colors = ButtonDefaults.buttonColors(backgroundColor = PinkAccent),
+                                enabled = !isInverting && !isRemovingBg
                             ) {
                                 Text(if (isRemovingBg) "Removing..." else "Remove BG")
                             }
@@ -548,7 +585,8 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(backgroundColor = IndigoAccent),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isInverting && !isRemovingBg
                         ) {
                             Text("Polish for CNC")
                         }

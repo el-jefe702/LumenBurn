@@ -98,6 +98,11 @@ object ApiClient {
         return postJson("/api/remove_bg", JSONObject().put("image_url", imageUrl))
     }
 
+    // Invert depth map
+    suspend fun invert(imageUrl: String): JSONObject {
+        return postJson("/api/invert", JSONObject().put("image_url", imageUrl))
+    }
+
     // Convert photo to depth map with aspect ratio
     suspend fun photoToDepth(file: File, aspectRatio: String = "1:1"): JSONObject {
         return postMultipart("/api/photo-to-depth", file, "photo", mapOf("aspectRatio" to aspectRatio))

@@ -36,3 +36,7 @@ Thumbs.db
 # Blender binary files (use Git LFS for these if needed)
 *.blend
 *.blend1
+
+# Workspace / Agent metadata
+.agents/
+ORIGINAL_REQUEST.md
