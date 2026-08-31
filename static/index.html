@@ -29,6 +29,16 @@
             <!-- Text Panel -->
             <div id="textPanel">
                 <textarea id="promptInput" placeholder="Describe the intricate 3D relief carving you want to generate..."></textarea>
+                <div class="form-group">
+                    <label for="aspectRatioSelect" class="form-label">Aspect Ratio</label>
+                    <select id="aspectRatioSelect" class="form-select">
+                        <option value="1:1" selected>1:1 (Square)</option>
+                        <option value="4:3">4:3 (Landscape)</option>
+                        <option value="3:2">3:2 (Classic)</option>
+                        <option value="16:9">16:9 (Widescreen)</option>
+                        <option value="2:3">2:3 (Portrait)</option>
+                    </select>
+                </div>
                 <button class="btn btn-primary" id="generateBtn" onclick="generateMap()">Ignite Forge</button>
             </div>
 
@@ -38,6 +48,16 @@
                     <div id="dropText">Drag & drop photo here or click to browse</div>
                     <input type="file" id="fileInput" accept="image/png, image/jpeg, image/webp" style="display:none" onchange="handleFileSelect(event)">
                     <img id="photoPreviewImg" class="photo-preview" alt="Preview">
+                </div>
+                <div class="form-group">
+                    <label for="photoAspectRatioSelect" class="form-label">Aspect Ratio</label>
+                    <select id="photoAspectRatioSelect" class="form-select">
+                        <option value="1:1" selected>1:1 (Square)</option>
+                        <option value="4:3">4:3 (Landscape)</option>
+                        <option value="3:2">3:2 (Classic)</option>
+                        <option value="16:9">16:9 (Widescreen)</option>
+                        <option value="2:3">2:3 (Portrait)</option>
+                    </select>
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 16px;">
                     <button class="btn btn-secondary" id="convertBtn" onclick="convertPhoto()" disabled>🔬 Convert to Depth Map</button>
@@ -169,6 +189,8 @@
                 return;
             }
 
+            const aspectRatio = document.getElementById('aspectRatioSelect')?.value || '1:1';
+
             const btn = document.getElementById('generateBtn');
             btn.disabled = true;
             document.getElementById('loadingText').innerText = 'Forging Map in the Cloud...';
@@ -180,7 +202,7 @@
                 const res = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt })
+                    body: JSON.stringify({ prompt, aspectRatio })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Generation failed');
@@ -198,6 +220,8 @@
         async function convertPhoto() {
             if (!selectedPhotoFile) return;
 
+            const aspectRatio = document.getElementById('photoAspectRatioSelect')?.value || '1:1';
+
             const btn = document.getElementById('convertBtn');
             btn.disabled = true;
             document.getElementById('loadingText').innerText = '🔬 Analyzing depth structure...';
@@ -212,6 +236,7 @@
             try {
                 const formData = new FormData();
                 formData.append('photo', selectedPhotoFile);
+                formData.append('aspectRatio', aspectRatio);
 
                 const res = await fetch('/api/photo-to-depth', {
                     method: 'POST',

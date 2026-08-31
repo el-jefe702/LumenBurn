@@ -4,11 +4,17 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.TimeUnit
 
 object ApiClient {
     var baseUrl = "http://4.3.2.122:8000/"
@@ -31,29 +37,37 @@ object ApiClient {
     }
 
     // POST multipart file — uses OkHttp to correctly handle binary data
-    // (raw HttpURLConnection with a char-based BufferedWriter can corrupt binary payloads)
-    private suspend fun postMultipart(path: String, file: File, fieldName: String): JSONObject = withContext(Dispatchers.IO) {
-        val client = okhttp3.OkHttpClient.Builder()
-            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
+    private suspend fun postMultipart(
+        path: String,
+        file: File,
+        fieldName: String,
+        extraParams: Map<String, String> = emptyMap()
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
             .build()
 
-        val mimeType = okhttp3.MediaType.parse("image/*") ?: okhttp3.MediaType.parse("application/octet-stream")!!
-        val requestBody = okhttp3.MultipartBody.Builder()
-            .setType(okhttp3.MultipartBody.FORM)
-            .addFormDataPart(fieldName, file.name, okhttp3.RequestBody.create(mimeType, file))
-            .build()
+        val mimeType = "image/*".toMediaTypeOrNull() ?: "application/octet-stream".toMediaTypeOrNull()!!
+        val builder = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(fieldName, file.name, file.asRequestBody(mimeType))
 
-        val request = okhttp3.Request.Builder()
+        for ((key, value) in extraParams) {
+            builder.addFormDataPart(key, value)
+        }
+
+        val requestBody = builder.build()
+
+        val request = Request.Builder()
             .url(apiUrl(path))
             .post(requestBody)
             .build()
 
         val response = client.newCall(request).execute()
-        val responseText = response.body()?.string() ?: "{}"
+        val responseText = response.body?.string() ?: "{}"
         JSONObject(responseText)
     }
-
 
     // Download image as Bitmap
     suspend fun downloadImage(urlPath: String): Bitmap? = withContext(Dispatchers.IO) {
@@ -65,9 +79,13 @@ object ApiClient {
         } catch (e: Exception) { null }
     }
 
-    // Generate depth map from text prompt
-    suspend fun generate(prompt: String): JSONObject {
-        return postJson("/api/generate", JSONObject().put("prompt", prompt))
+    // Generate depth map from text prompt with aspect ratio
+    suspend fun generate(prompt: String, aspectRatio: String = "1:1"): JSONObject {
+        val body = JSONObject().apply {
+            put("prompt", prompt)
+            put("aspectRatio", aspectRatio)
+        }
+        return postJson("/api/generate", body)
     }
 
     // Post-process (polish/smooth) an image
@@ -80,8 +98,8 @@ object ApiClient {
         return postJson("/api/remove_bg", JSONObject().put("image_url", imageUrl))
     }
 
-    // Convert photo to depth map
-    suspend fun photoToDepth(file: File): JSONObject {
-        return postMultipart("/api/photo-to-depth", file, "photo")
+    // Convert photo to depth map with aspect ratio
+    suspend fun photoToDepth(file: File, aspectRatio: String = "1:1"): JSONObject {
+        return postMultipart("/api/photo-to-depth", file, "photo", mapOf("aspectRatio" to aspectRatio))
     }
 }

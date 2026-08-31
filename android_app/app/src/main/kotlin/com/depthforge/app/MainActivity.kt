@@ -147,9 +147,47 @@ fun ForgeApp(prefs: SharedPreferences) {
 }
 
 @Composable
+fun AspectRatioSelector(
+    selectedRatio: String,
+    onRatioSelected: (String) -> Unit
+) {
+    val ratios = listOf("1:1", "4:3", "3:2", "16:9", "2:3")
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Aspect Ratio", color = TextSecondary, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ratios.forEach { ratio ->
+                val isSelected = ratio == selectedRatio
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) GoldAccent else CardBackground)
+                        .border(1.dp, if (isSelected) GoldAccent else GrayBorder, RoundedCornerShape(8.dp))
+                        .clickable { onRatioSelected(ratio) }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = ratio,
+                        color = if (isSelected) DarkBackground else TextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun ForgeScreen(onOpenSettings: () -> Unit) {
     var promptInput by remember { mutableStateOf("") }
     var inputMode by remember { mutableStateOf("text") }
+    var selectedAspectRatio by remember { mutableStateOf("1:1") }
     var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var currentImageUrl by remember { mutableStateOf("") }
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -249,6 +287,11 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                             )
                         )
                         Spacer(modifier = Modifier.height(16.dp))
+                        AspectRatioSelector(
+                            selectedRatio = selectedAspectRatio,
+                            onRatioSelected = { selectedAspectRatio = it }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
                                 if (promptInput.isNotBlank()) {
@@ -261,7 +304,7 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                                     
                                     coroutineScope.launch {
                                         try {
-                                            val res = ApiClient.generate(promptInput)
+                                            val res = ApiClient.generate(promptInput, selectedAspectRatio)
                                             if (res.optString("status") == "success") {
                                                 currentImageUrl = res.getString("image_url")
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)
@@ -295,6 +338,11 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                             Text("Photo Selected ✓", color = EmeraldAccent, fontSize = 14.sp)
                         }
                         Spacer(modifier = Modifier.height(16.dp))
+                        AspectRatioSelector(
+                            selectedRatio = selectedAspectRatio,
+                            onRatioSelected = { selectedAspectRatio = it }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
                                 selectedPhotoUri?.let { uri ->
@@ -313,7 +361,7 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                                                     input.copyTo(output)
                                                 }
                                             }
-                                            val res = ApiClient.photoToDepth(tempFile)
+                                            val res = ApiClient.photoToDepth(tempFile, selectedAspectRatio)
                                             if (res.optString("status") == "success") {
                                                 currentImageUrl = res.getString("image_url")
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)

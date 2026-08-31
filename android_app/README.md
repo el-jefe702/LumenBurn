@@ -7,6 +7,7 @@ This directory contains the native Android application for **DepthForge**. Built
 * **Landing Page & Lead Form:** Visual entry screen showing the brand logo. Includes a popup mailing list registration form (Full Name, Email, Premium Interest checkbox) that records entries via `/api/lead` and skips prompting on subsequent app launches.
 * **The Forge (Depth-Map Generator):** 
   * Generates 16-bit depth maps using prompt entries via the cloud `/api/generate` route.
+  * **Aspect Ratio Selector:** Native selectable chips (`1:1`, `4:3`, `3:2`, `16:9`, `2:3`) for custom aspect ratios in both text prompt and photo upload modes.
   * **Post-Processing pipeline animation:** A beautiful visual sequence demonstrating the bilateral filtering, inpainting, scaling, normalization, and export stages during `/api/postprocess`.
   * **Admin Queue Submission:** Prompts for student name and exports the LightBurn project file to `/api/laser/lightburn` on the server.
   * **Direct Spindle Control:** Strict safety check dialog verifying laser pathway clear and exhaust active. Authenticated with typed `CONFIRM` verification. It initiates the Ruida mock sequence and streams status updates over WebSockets (`/ws`) or fallback HTTP status polling.

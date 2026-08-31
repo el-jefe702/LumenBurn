@@ -113,12 +113,18 @@ const photoUpload = multer({
     }
 });
 
+const ALLOWED_ASPECT_RATIOS = ['1:1', '4:3', '3:2', '16:9', '2:3'];
+const sanitizeAspectRatio = (ratio) => {
+    return ALLOWED_ASPECT_RATIOS.includes(ratio) ? ratio : '1:1';
+};
+
 // --- ROUTES ---
 
 app.post('/api/generate', async (req, res) => {
     console.log(`[${new Date().toLocaleTimeString()}] 🚀 POST /api/generate - Starting generation...`);
     try {
         const studentPrompt = req.body.prompt || "";
+        const aspectRatio = sanitizeAspectRatio(req.body.aspectRatio);
         
         const improveResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -134,7 +140,7 @@ app.post('/api/generate', async (req, res) => {
             config: {
                 numberOfImages: 1,
                 outputMimeType: "image/png",
-                aspectRatio: "1:1"
+                aspectRatio: aspectRatio
             }
         });
         
@@ -191,6 +197,8 @@ app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) =>
     try {
         if (!req.file) return res.status(400).json({ error: 'No photo uploaded.' });
 
+        const aspectRatio = sanitizeAspectRatio(req.body.aspectRatio);
+
         const photoBytes = await fs.promises.readFile(uploadedPath);
         const photoBase64 = photoBytes.toString('base64');
         const mimeType = req.file.mimetype || 'image/jpeg';
@@ -220,7 +228,7 @@ app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) =>
             config: {
                 numberOfImages: 1,
                 outputMimeType: 'image/png',
-                aspectRatio: '1:1'
+                aspectRatio: aspectRatio
             }
         });
 
@@ -246,4 +254,9 @@ app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) =>
     }
 });
 
-app.listen(port, '0.0.0.0', () => console.log(`DepthForge running on http://0.0.0.0:${port}`));
+let server;
+if (process.env.NODE_ENV !== 'test') {
+    server = app.listen(port, '0.0.0.0', () => console.log(`DepthForge running on http://0.0.0.0:${port}`));
+}
+
+export { app, server, sanitizeAspectRatio, ALLOWED_ASPECT_RATIOS, ai };
