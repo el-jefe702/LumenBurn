@@ -30,29 +30,30 @@ object ApiClient {
         JSONObject(responseText)
     }
 
-    // POST multipart file
+    // POST multipart file — uses OkHttp to correctly handle binary data
+    // (raw HttpURLConnection with a char-based BufferedWriter can corrupt binary payloads)
     private suspend fun postMultipart(path: String, file: File, fieldName: String): JSONObject = withContext(Dispatchers.IO) {
-        val boundary = "---DepthForge${System.currentTimeMillis()}---"
-        val conn = URL(apiUrl(path)).openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-        conn.doOutput = true
-        conn.connectTimeout = 60000
-        conn.readTimeout = 180000
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
 
-        conn.outputStream.bufferedWriter().use { writer ->
-            writer.write("--$boundary\r\n")
-            writer.write("Content-Disposition: form-data; name=\"$fieldName\"; filename=\"${file.name}\"\r\n")
-            writer.write("Content-Type: image/jpeg\r\n\r\n")
-            writer.flush()
-            file.inputStream().use { it.copyTo(conn.outputStream) }
-            conn.outputStream.flush()
-            writer.write("\r\n--$boundary--\r\n")
-        }
+        val mimeType = okhttp3.MediaType.parse("image/*") ?: okhttp3.MediaType.parse("application/octet-stream")!!
+        val requestBody = okhttp3.MultipartBody.Builder()
+            .setType(okhttp3.MultipartBody.FORM)
+            .addFormDataPart(fieldName, file.name, okhttp3.RequestBody.create(mimeType, file))
+            .build()
 
-        val responseText = conn.inputStream.bufferedReader().readText()
+        val request = okhttp3.Request.Builder()
+            .url(apiUrl(path))
+            .post(requestBody)
+            .build()
+
+        val response = client.newCall(request).execute()
+        val responseText = response.body()?.string() ?: "{}"
         JSONObject(responseText)
     }
+
 
     // Download image as Bitmap
     suspend fun downloadImage(urlPath: String): Bitmap? = withContext(Dispatchers.IO) {

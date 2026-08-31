@@ -23,13 +23,19 @@ def smooth_image(input_path, output_path):
     # STEP 4: CLEAN UP MISSING DATA (INPAINTING)
     # ==========================================
     print("Identifying and cleaning up missing data (inpainting)...", flush=True)
-    # Do this before filtering so noise doesn't bleed.
-    # Create a mask where data is missing (pure black pixels)
-    missing_mask = (img_16bit == 0).astype(np.uint8)
+    # Build a mask of the foreground region (any non-zero pixel is subject matter).
+    # We only want to inpaint holes *within* the subject, not the intentional
+    # pure-black background. Dilate the foreground to establish its bounding region,
+    # then find pixels that are zero *inside* that region — those are the real holes.
+    fg_mask = (img_16bit > 0).astype(np.uint8)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    fg_dilated = cv2.dilate(fg_mask, kernel, iterations=3)
+    # Holes are pixels that are zero AND inside the dilated foreground region
+    missing_mask = ((img_16bit == 0) & (fg_dilated > 0)).astype(np.uint8)
 
     # Close minor holes using morphological operations
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    cleaned_16bit = cv2.morphologyEx(img_16bit, cv2.MORPH_CLOSE, kernel)
+    struct_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    cleaned_16bit = cv2.morphologyEx(img_16bit, cv2.MORPH_CLOSE, struct_kernel)
 
     # If large holes exist, downscale mask to 8-bit to use OpenCV's inpaint
     if np.any(missing_mask):
@@ -109,13 +115,9 @@ def remove_bg(input_path, output_path):
     cv2.imwrite(output_path, black_bg)
 
 def create_mesh(input_path, output_path):
-    # Basic fallback mesh logic (creates a dummy file to satisfy server.js)
-    # To implement real 3D generation, install trimesh and generate displacement here
-    with open(output_path, 'w') as f:
-        if output_path.lower().endswith('.stl'):
-            f.write("solid placeholder\n  facet normal 0 0 1\n    outer loop\n      vertex 0 0 0\n      vertex 1 0 0\n      vertex 0 1 0\n    endloop\n  endfacet\nendsolid placeholder\n")
-        else:
-            f.write("") # Blank file for .glb or others
+    print("Error: 3D mesh generation is not yet implemented.", flush=True)
+    print("To enable this, install 'trimesh' and implement displacement mesh generation here.", flush=True)
+    sys.exit(1)
 
 def main():
     if len(sys.argv) < 4:

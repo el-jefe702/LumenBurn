@@ -27,9 +27,10 @@ def run_tuner(image_path):
     # sigmaColor: Filter sigma in the color space (larger = merges further apart elevations)
     # sigmaSpace: Filter sigma in the coordinate space (larger = influences pixels further away)
     cv2.createTrackbar("Neighborhood (d)", window_name, 9, 30, no_op)
-    cv2.createTrackbar("Sigma Color", window_name, 75, 200, no_op)
-    cv2.createTrackbar("Sigma Space", window_name, 75, 200, no_op)
-    cv2.createTrackbar("Blur Kernel", window_name, 5, 15, no_op) # Gaussian blur at the end
+    cv2.createTrackbar("Sigma Color", window_name, 5000, 10000, no_op)
+    cv2.createTrackbar("Sigma Space", window_name, 5, 200, no_op)
+    cv2.createTrackbar("Blur Kernel", window_name, 3, 15, no_op) # Gaussian blur at the end
+
 
     print("Live tuner running. Adjust sliders. Press 's' to save the result, or 'ESC' to close.")
 

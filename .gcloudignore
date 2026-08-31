@@ -9,7 +9,6 @@ __pycache__/
 .openmcp/
 android_app/
 blender_plugin/
-LumenForge-main/
 *.md
 .env
 

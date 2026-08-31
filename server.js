@@ -28,7 +28,13 @@ const uploadsDir = path.join(staticDir, 'uploads');
 });
 
 app.use('/static', express.static(staticDir));
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
+
+// Global unhandled rejection guard — prevents silent process crashes
+process.on('unhandledRejection', (reason) => {
+    console.error('[UnhandledRejection]', reason);
+});
+
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -150,29 +156,32 @@ app.post('/api/generate', async (req, res) => {
 });
 
 app.post('/api/postprocess', async (req, res) => {
+    const filename = path.basename(req.body.image_url || "");
+    if (!filename) return res.status(400).json({ error: 'Missing image_url.' });
+    const inputPath = path.join(generatedDir, filename);
+    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'Image not found on server.' });
     try {
-        const filename = path.basename(req.body.image_url || "");
-        const inputPath = path.join(generatedDir, filename);
         const outputPath = path.join(generatedDir, `forge_${filename}`);
         await runPythonProcessor('smooth', [inputPath, outputPath]);
         res.json({ status: "success", image_url: `/static/generated/forge_${filename}` });
     } catch (error) {
         console.error("Python smoothing failed, bypassing:", error.message);
-        const filename = path.basename(req.body.image_url || "");
         res.json({ status: "success", image_url: `/static/generated/${filename}` });
     }
 });
 
 app.post('/api/remove_bg', async (req, res) => {
+    const filename = path.basename(req.body.image_url || "");
+    if (!filename) return res.status(400).json({ error: 'Missing image_url.' });
+    const inputPath = path.join(generatedDir, filename);
+    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'Image not found on server.' });
     try {
-        const filename = path.basename(req.body.image_url || "");
-        const inputPath = path.join(generatedDir, filename);
         const outputPath = path.join(generatedDir, `iso_${filename}`);
         await runPythonProcessor('remove_bg', [inputPath, outputPath]);
         res.json({ status: "success", image_url: `/static/generated/iso_${filename}` });
     } catch (error) {
         console.error("Python remove_bg failed, bypassing:", error.message);
-        const filename = path.basename(req.body.image_url || "");
+
         res.json({ status: "success", image_url: `/static/generated/${filename}` });
     }
 });
