@@ -70,9 +70,8 @@ const resolvePythonExecutable = () => {
     const candidates = [
         process.env.PYTHON_EXEC,
         path.join(__dirname, '.venv', 'Scripts', 'python.exe'),
-        path.join(__dirname, 'DepthForgeApp', '.venv', 'Scripts', 'python.exe'),
-        path.join(__dirname, '.venv', 'Scripts', 'python'),
-        path.join(__dirname, 'DepthForgeApp', '.venv', 'Scripts', 'python')
+        path.join(__dirname, '.venv', 'bin', 'python'),
+        path.join(__dirname, '.venv', 'Scripts', 'python')
     ];
     for (const candidate of candidates) {
         if (candidate && fs.existsSync(candidate)) return candidate;
@@ -124,7 +123,7 @@ app.post('/api/generate', async (req, res) => {
         const finalPrompt = buildFinalPrompt(responseJson.improved_prompt || studentPrompt);
         
         const imageResult = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
+            model: 'imagen-4.0-fast-generate-001',
             prompt: finalPrompt,
             config: {
                 numberOfImages: 1,
@@ -207,7 +206,7 @@ app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) =>
         const finalDepthPrompt = buildFinalPrompt(depthPrompt);
 
         const imageResult = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
+            model: 'imagen-4.0-fast-generate-001',
             prompt: finalDepthPrompt,
             config: {
                 numberOfImages: 1,
