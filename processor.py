@@ -7,11 +7,11 @@ def smooth_image(input_path, output_path):
     # ==========================================
     # STEP 1: LOAD & CONVERT TO 16-BIT GRAYSCALE
     # ==========================================
-    print("Loading image and converting to 16-bit grayscale...", flush=True)
+    print("[STEP 1/5] Loading image and converting to 16-bit grayscale...", flush=True)
     raw_img = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
 
     if raw_img is None:
-        print(f"Error: Could not load {input_path}", flush=True)
+        print(f"Error: Could not load {input_path}", file=sys.stderr, flush=True)
         sys.exit(1)
 
     if raw_img.dtype == np.uint16:
@@ -29,9 +29,9 @@ def smooth_image(input_path, output_path):
         img_16bit = (img_8bit.astype(np.uint32) * 257).astype(np.uint16)
 
     # ==========================================
-    # STEP 4: CLEAN UP MISSING DATA (INPAINTING)
+    # STEP 2: CLEAN UP MISSING DATA (INPAINTING)
     # ==========================================
-    print("Identifying and cleaning up missing data (inpainting)...", flush=True)
+    print("[STEP 2/5] Identifying and cleaning up missing data (inpainting)...", flush=True)
     # Build a mask of the foreground region (any non-zero pixel is subject matter).
     # We only want to inpaint holes *within* the subject, not the intentional
     # pure-black background. Dilate the foreground to establish its bounding region,
@@ -56,9 +56,9 @@ def smooth_image(input_path, output_path):
         cleaned_16bit = (inpainted_8bit.astype(np.uint32) * 257).astype(np.uint16)
 
     # ==========================================
-    # STEP 2: SPATIAL FILTERING (FIX BANDING)
+    # STEP 3: SPATIAL FILTERING (FIX BANDING)
     # ==========================================
-    print("Applying bilateral spatial filtering to fix banding while preserving edges...", flush=True)
+    print("[STEP 3/5] Applying bilateral spatial filtering to fix banding while preserving edges...", flush=True)
     # OpenCV bilateralFilter does not support uint16 natively. 
     # Convert to float32 first to perform precise mathematical smoothing.
     float_depth = cleaned_16bit.astype(np.float32)
@@ -72,9 +72,9 @@ def smooth_image(input_path, output_path):
     filtered_float = cv2.GaussianBlur(filtered_float, (3, 3), 0)
 
     # ==========================================
-    # STEP 3: NORMALIZE THE DEPTH RANGE
+    # STEP 4: NORMALIZE THE DEPTH RANGE
     # ==========================================
-    print("Stretching depth values to normalize full 16-bit range...", flush=True)
+    print("[STEP 4/5] Stretching depth values to normalize full 16-bit range...", flush=True)
     # Find the lowest and highest values in the filtered image
     min_val, max_val, _, _ = cv2.minMaxLoc(filtered_float)
 
@@ -89,7 +89,7 @@ def smooth_image(input_path, output_path):
     # ==========================================
     # STEP 5: EXPORT AS LOSSLESS 16-BIT PNG
     # ==========================================
-    print(f"Exporting processed 16-bit PNG to {output_path}...", flush=True)
+    print(f"[STEP 5/5] Exporting processed 16-bit PNG to {output_path}...", flush=True)
     # Explicitly use compression parameters for maximum file safety
     cv2.imwrite(output_path, final_16bit, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
@@ -99,7 +99,7 @@ def remove_bg(input_path, output_path):
     img_8bit = cv2.imread(input_path, cv2.IMREAD_COLOR)
     
     if img_8bit is None:
-        print(f"Error: Could not load {input_path}", flush=True)
+        print(f"Error: Could not load {input_path}", file=sys.stderr, flush=True)
         sys.exit(1)
         
     # Apply rembg
@@ -129,7 +129,7 @@ def invert_image(input_path, output_path):
     img = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
     
     if img is None:
-        print(f"Error: Could not load {input_path}", flush=True)
+        print(f"Error: Could not load {input_path}", file=sys.stderr, flush=True)
         sys.exit(1)
         
     if img.dtype == np.uint16:
@@ -161,13 +161,13 @@ def invert_image(input_path, output_path):
     print(f"Exporting inverted depth map to {output_path}...", flush=True)
 
 def create_mesh(input_path, output_path):
-    print("Error: 3D mesh generation is not yet implemented.", flush=True)
-    print("To enable this, install 'trimesh' and implement displacement mesh generation here.", flush=True)
+    print("Error: 3D mesh generation is not yet implemented.", file=sys.stderr, flush=True)
+    print("To enable this, install 'trimesh' and implement displacement mesh generation here.", file=sys.stderr, flush=True)
     sys.exit(1)
 
 def main():
     if len(sys.argv) < 4:
-        print("Usage: python processor.py <command> <input_path> <output_path>")
+        print("Usage: python processor.py <command> <input_path> <output_path>", file=sys.stderr, flush=True)
         sys.exit(1)
 
     command = sys.argv[1]
@@ -183,7 +183,7 @@ def main():
     elif command == "mesh":
         create_mesh(input_path, output_path)
     else:
-        print(f"Unknown command: {command}")
+        print(f"Unknown command: {command}", file=sys.stderr, flush=True)
         sys.exit(1)
 
 if __name__ == "__main__":

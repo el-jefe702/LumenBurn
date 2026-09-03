@@ -444,3 +444,77 @@ textarea:focus, input[type=text]:focus {
     justify-content: center;
   }
 }
+
+/* Prompt History Styles */
+.prompt-history-container {
+  margin-bottom: 16px;
+}
+
+.prompt-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn-clear-history {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-history:hover {
+  color: var(--accent-pink);
+  background-color: rgba(236, 72, 153, 0.1);
+}
+
+.prompt-history-select {
+  margin-bottom: 8px;
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.prompt-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.prompt-history-item {
+  background-color: #0d0d15;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+}
+
+.prompt-history-item:hover {
+  border-color: var(--accent-gold);
+  color: var(--text-primary);
+  background-color: rgba(212, 175, 55, 0.05);
+}
+
+.prompt-history-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}

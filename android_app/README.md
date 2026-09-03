@@ -7,9 +7,10 @@ This directory contains the native Android application for **DepthForge**. Built
 * **Landing Page & Lead Form:** Visual entry screen showing the brand logo. Includes a popup mailing list registration form (Full Name, Email, Premium Interest checkbox) that records entries via `/api/lead` and skips prompting on subsequent app launches.
 * **The Forge (Depth-Map Generator):** 
   * Generates 16-bit depth maps using prompt entries via the cloud `/api/generate` route.
+  * **Prompt History:** Automatically persists the last 10 successful prompts in `SharedPreferences` (`depthforge_prompt_history`), rendered as clickable items with clear history support.
   * **Aspect Ratio Selector:** Native selectable chips (`1:1`, `4:3`, `3:2`, `16:9`, `2:3`) for custom aspect ratios in both text prompt and photo upload modes.
   * **Invert Depth Map:** Direct action button to invert depth maps via `/api/invert`.
-  * **Post-Processing pipeline animation:** A beautiful visual sequence demonstrating the bilateral filtering, inpainting, scaling, normalization, and export stages during `/api/postprocess`.
+  * **Post-Processing Pipeline (Real-Time SSE Streaming):** Real-time visual sequence demonstrating the bilateral filtering, inpainting, scaling, normalization, and export stages streaming live over Server-Sent Events (`/api/postprocess-stream`) with zero fake delay loops.
   * **Admin Queue Submission:** Prompts for student name and exports the LightBurn project file to `/api/laser/lightburn` on the server.
   * **Direct Spindle Control:** Strict safety check dialog verifying laser pathway clear and exhaust active. Authenticated with typed `CONFIRM` verification. It initiates the Ruida mock sequence and streams status updates over WebSockets (`/ws`) or fallback HTTP status polling.
 * **Support AI:** Direct chat connection with the SLCreations studio assistant (via `/api/chat`), with unique local session persistence.

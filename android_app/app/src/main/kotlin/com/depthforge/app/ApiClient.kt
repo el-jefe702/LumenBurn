@@ -93,6 +93,63 @@ object ApiClient {
         return postJson("/api/postprocess", JSONObject().put("image_url", imageUrl))
     }
 
+    // Post-process with real-time SSE progress streaming
+    suspend fun postprocessStream(
+        imageUrl: String,
+        onProgress: (step: Int, message: String) -> Unit = { _, _ -> }
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
+            .build()
+
+        val encodedUrl = java.net.URLEncoder.encode(imageUrl, "UTF-8")
+        val request = Request.Builder()
+            .url(apiUrl("/api/postprocess-stream?image_url=$encodedUrl"))
+            .header("Accept", "text/event-stream")
+            .build()
+
+        var resultJson = JSONObject()
+        val response = client.newCall(request).execute()
+        response.use { resp ->
+            if (!resp.isSuccessful) {
+                val errorBody = resp.body?.string() ?: ""
+                return@withContext try {
+                    JSONObject(errorBody)
+                } catch (e: Exception) {
+                    JSONObject().put("error", "HTTP ${resp.code}: ${resp.message}")
+                }
+            }
+            resp.body?.byteStream()?.bufferedReader()?.use { reader ->
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    val currentLine = line ?: continue
+                    if (currentLine.startsWith("data:")) {
+                        val dataStr = currentLine.removePrefix("data:").trim()
+                        if (dataStr.isNotEmpty()) {
+                            try {
+                                val json = JSONObject(dataStr)
+                                if (json.has("step")) {
+                                    val step = json.optInt("step", 1)
+                                    val msg = json.optString("message", "")
+                                    withContext(Dispatchers.Main) {
+                                        onProgress(step, msg)
+                                    }
+                                }
+                                if (json.optString("status") == "complete" || json.has("image_url") || json.has("error")) {
+                                    resultJson = json
+                                }
+                            } catch (e: Exception) {
+                                // ignore malformed line
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        resultJson
+    }
+
     // Remove background
     suspend fun removeBg(imageUrl: String): JSONObject {
         return postJson("/api/remove_bg", JSONObject().put("image_url", imageUrl))

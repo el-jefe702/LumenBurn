@@ -9,6 +9,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -88,12 +90,45 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+object PromptHistoryManager {
+    const val PREFS_KEY = "depthforge_prompt_history"
+    const val MAX_ITEMS = 10
+    private val gson = Gson()
+    private val listType = object : TypeToken<List<String?>>() {}.type
+
+    fun getHistory(prefs: SharedPreferences): List<String> {
+        val jsonStr = prefs.getString(PREFS_KEY, null) ?: return emptyList()
+        return try {
+            val list: List<String?>? = gson.fromJson(jsonStr, listType)
+            list?.filterNotNull()?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun savePrompt(prefs: SharedPreferences, prompt: String?): List<String> {
+        val trimmed = prompt?.trim() ?: ""
+        if (trimmed.isBlank()) return getHistory(prefs)
+        val current = getHistory(prefs).toMutableList()
+        current.removeAll { it == trimmed }
+        current.add(0, trimmed)
+        val capped = if (current.size > MAX_ITEMS) current.subList(0, MAX_ITEMS) else current
+        val jsonStr = gson.toJson(capped)
+        prefs.edit().putString(PREFS_KEY, jsonStr).apply()
+        return capped
+    }
+
+    fun clearHistory(prefs: SharedPreferences) {
+        prefs.edit().remove(PREFS_KEY).apply()
+    }
+}
+
 @Composable
 fun ForgeApp(prefs: SharedPreferences) {
     var showSettings by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
-        ForgeScreen(onOpenSettings = { showSettings = true })
+        ForgeScreen(prefs = prefs, onOpenSettings = { showSettings = true })
 
         if (showSettings) {
             var serverUrlInput by remember { mutableStateOf(ApiClient.baseUrl) }
@@ -185,7 +220,11 @@ fun AspectRatioSelector(
 }
 
 @Composable
-fun ForgeScreen(onOpenSettings: () -> Unit) {
+fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
+    val context = LocalContext.current
+    val actualPrefs = prefs ?: context.getSharedPreferences("depthforge_prefs", Context.MODE_PRIVATE)
+    var promptHistory by remember { mutableStateOf(PromptHistoryManager.getHistory(actualPrefs)) }
+
     var promptInput by remember { mutableStateOf("") }
     var inputMode by remember { mutableStateOf("text") }
     var selectedAspectRatio by remember { mutableStateOf("1:1") }
@@ -202,7 +241,6 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
     var lastError by remember { mutableStateOf<String?>(null) }
     var activePolishStep by remember { mutableStateOf(-1) }
     
-    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
 
@@ -288,6 +326,62 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                                 focusedBorderColor = GoldAccent
                             )
                         )
+
+                        if (promptHistory.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Recent Prompts (${promptHistory.size})",
+                                        color = TextSecondary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            PromptHistoryManager.clearHistory(actualPrefs)
+                                            promptHistory = emptyList()
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("Clear history", color = PinkAccent, fontSize = 12.sp)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    promptHistory.forEach { histPrompt ->
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFF0D0D15))
+                                                .border(1.dp, GrayBorder, RoundedCornerShape(6.dp))
+                                                .clickable {
+                                                    promptInput = histPrompt
+                                                }
+                                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = histPrompt,
+                                                color = TextPrimary,
+                                                fontSize = 12.sp,
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(16.dp))
                         AspectRatioSelector(
                             selectedRatio = selectedAspectRatio,
@@ -310,6 +404,7 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                                             if (res.optString("status") == "success") {
                                                 currentImageUrl = res.getString("image_url")
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)
+                                                promptHistory = PromptHistoryManager.savePrompt(actualPrefs, promptInput)
                                             } else {
                                                 lastError = "Generation failed"
                                             }
@@ -556,32 +651,30 @@ fun ForgeScreen(onOpenSettings: () -> Unit) {
                             onClick = {
                                 isPolishing = true
                                 activePolishStep = 0
+                                lastError = null
                                 coroutineScope.launch {
-                                    val apiJob = async {
-                                        try {
-                                            val res = ApiClient.postprocess(currentImageUrl)
-                                            if (res.optString("status") == "success") {
-                                                res.getString("image_url")
-                                            } else null
-                                        } catch (e: Exception) { null }
+                                    try {
+                                        val res = ApiClient.postprocessStream(currentImageUrl) { step, _ ->
+                                            activePolishStep = (step - 1).coerceIn(0, 4)
+                                        }
+                                        if (res.optString("status") == "complete" || res.has("image_url")) {
+                                            val newUrl = res.optString("image_url")
+                                            if (newUrl.isNotBlank()) {
+                                                currentImageUrl = newUrl
+                                                currentBitmap = ApiClient.downloadImage(currentImageUrl)
+                                                isPolished = true
+                                            } else {
+                                                lastError = "Polish failed"
+                                            }
+                                        } else {
+                                            lastError = res.optString("error", "Polish failed")
+                                        }
+                                    } catch (e: Exception) {
+                                        lastError = e.message ?: "Polish failed"
+                                    } finally {
+                                        isPolishing = false
+                                        activePolishStep = -1
                                     }
-                                    
-                                    // Animate steps
-                                    for (i in 0..4) {
-                                        activePolishStep = i
-                                        delay(2500)
-                                    }
-                                    
-                                    val newUrl = apiJob.await()
-                                    if (newUrl != null) {
-                                        currentImageUrl = newUrl
-                                        currentBitmap = ApiClient.downloadImage(currentImageUrl)
-                                        isPolished = true
-                                    } else {
-                                        lastError = "Polish failed"
-                                    }
-                                    isPolishing = false
-                                    activePolishStep = -1
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(backgroundColor = IndigoAccent),

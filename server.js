@@ -55,6 +55,37 @@ if (!process.env.GEMINI_API_KEY) {
     console.warn("WARNING: GEMINI_API_KEY is missing from .env! Image generation will fail.");
 }
 
+// ----------------------------------------------------------------------
+// LumenBurn API Endpoint
+// ----------------------------------------------------------------------
+import { Converter } from './lumenburn/converter.js';
+const upload = multer();
+
+app.post('/api/lumenburn/convert', upload.single('svg'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).send('No SVG file provided.');
+    }
+    
+    try {
+        const svgContent = req.file.buffer.toString('utf-8');
+        const lbrn2Content = Converter.convertSvgToLbrn2(svgContent);
+        
+        res.setHeader('Content-Type', 'application/xml');
+        res.setHeader('Content-Disposition', 'attachment; filename="output.lbrn2"');
+        res.send(lbrn2Content);
+    } catch (err) {
+        console.error('LumenBurn Error:', err);
+        res.status(500).send('Conversion failed: ' + err.message);
+    }
+});
+
+// Serve the lumenburn UI at /lumenburn
+app.get('/lumenburn', (req, res) => {
+    res.sendFile(path.join(__dirname, 'static', 'lumenburn.html'));
+});
+
+// ----------------------------------------------------------------------
+
 // --- PROMPT ARCHITECTURE ---
 const buildImprovePrompt = (userIdea) => 
     `Act as a master CNC relief artist. User Idea: ${userIdea} ` +
@@ -73,8 +104,10 @@ const buildFinalPrompt = (improvedPrompt) =>
 
 // --- HELPER FOR PYTHON TASKS ---
 const resolvePythonExecutable = () => {
+    if (process.env.PYTHON_EXEC) {
+        return process.env.PYTHON_EXEC;
+    }
     const candidates = [
-        process.env.PYTHON_EXEC,
         path.join(__dirname, '.venv', 'Scripts', 'python.exe'),
         path.join(__dirname, '.venv', 'bin', 'python'),
         path.join(__dirname, '.venv', 'Scripts', 'python')
@@ -82,13 +115,31 @@ const resolvePythonExecutable = () => {
     for (const candidate of candidates) {
         if (candidate && fs.existsSync(candidate)) return candidate;
     }
-    return process.env.PYTHON_EXEC || (process.platform === 'win32' ? 'python.exe' : 'python');
+    return process.platform === 'win32' ? 'python.exe' : 'python';
+};
+
+const parseStepFromLog = (line) => {
+    if (typeof line !== 'string') return null;
+    const stepMatch = line.match(/\[STEP\s+(\d+)\/(\d+)\]/i);
+    if (stepMatch) {
+        return parseInt(stepMatch[1], 10);
+    }
+    if (/loading|convert.*16-bit|upscal/i.test(line)) return 1;
+    if (/inpaint|missing data|hole/i.test(line)) return 2;
+    if (/bilateral|gaussian|spatial filter|banding/i.test(line)) return 3;
+    if (/normaliz|stretch.*range/i.test(line)) return 4;
+    if (/export.*png|saving/i.test(line)) return 5;
+    return null;
+};
+
+const spawnPythonProcessor = (command, args) => {
+    const pythonExec = resolvePythonExecutable();
+    return spawn(pythonExec, ['-u', 'processor.py', command, ...args]);
 };
 
 const runPythonProcessor = (command, args) => {
     return new Promise((resolve, reject) => {
-        const pythonExec = resolvePythonExecutable();
-        const pyProg = spawn(pythonExec, ['-u', 'processor.py', command, ...args]);
+        const pyProg = spawnPythonProcessor(command, args);
         
         pyProg.stdout.on('data', (data) => console.log(`[Python] ${data.toString().trim()}`));
         let errorOutput = '';
@@ -163,10 +214,11 @@ app.post('/api/generate', async (req, res) => {
 
 app.post('/api/postprocess', async (req, res) => {
     const rawUrl = typeof req.body?.image_url === 'string' ? req.body.image_url.trim() : '';
-    const filename = path.basename(rawUrl);
-    if (!rawUrl || !filename) return res.status(400).json({ error: 'Missing image_url.' });
+    const cleanUrl = rawUrl.split('?')[0].split('#')[0];
+    const filename = path.basename(cleanUrl);
+    if (!rawUrl || !filename || filename === '.' || filename === '..') return res.status(400).json({ error: 'Missing image_url.' });
     const inputPath = path.join(generatedDir, filename);
-    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'Image not found on server.' });
+    if (!fs.existsSync(inputPath) || !fs.statSync(inputPath).isFile()) return res.status(404).json({ error: 'Image not found on server.' });
     try {
         const outputPath = path.join(generatedDir, `forge_${filename}`);
         await runPythonProcessor('smooth', [inputPath, outputPath]);
@@ -177,12 +229,144 @@ app.post('/api/postprocess', async (req, res) => {
     }
 });
 
+const handlePostprocessStream = async (req, res) => {
+    const rawUrl = typeof (req.query?.image_url || req.body?.image_url) === 'string'
+        ? (req.query?.image_url || req.body?.image_url).trim()
+        : '';
+    const cleanUrl = rawUrl.split('?')[0].split('#')[0];
+    const filename = path.basename(cleanUrl);
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+    }
+
+    const sendEvent = (data) => {
+        if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        }
+    };
+
+    if (!rawUrl || !filename || filename === '.' || filename === '..') {
+        sendEvent({ status: 'error', error: 'Missing image_url.' });
+        return res.end();
+    }
+
+    const inputPath = path.join(generatedDir, filename);
+    if (!fs.existsSync(inputPath) || !fs.statSync(inputPath).isFile()) {
+        sendEvent({ status: 'error', error: 'Image not found on server.' });
+        return res.end();
+    }
+
+    const outputPath = path.join(generatedDir, `forge_${filename}`);
+    let pyProg;
+    try {
+        pyProg = spawnPythonProcessor('smooth', [inputPath, outputPath]);
+    } catch (err) {
+        sendEvent({ status: 'error', error: `Could not start Python: ${err.message}` });
+        return res.end();
+    }
+
+    let errorOutput = '';
+    let lastStdoutError = '';
+    let isFinished = false;
+    let stdoutBuffer = '';
+
+    // Clean up child process if client closes stream early
+    req.on('close', () => {
+        if (!isFinished) {
+            isFinished = true;
+            try { pyProg.kill(); } catch (e) {}
+        }
+    });
+
+    pyProg.stdout.on('data', (chunk) => {
+        stdoutBuffer += chunk.toString();
+        const lines = stdoutBuffer.split(/\r?\n/);
+        stdoutBuffer = lines.pop() || '';
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            if (/^(error|exception|fail)/i.test(line)) {
+                lastStdoutError = line;
+            }
+            console.log(`[Python Stream] ${line}`);
+            const step = parseStepFromLog(line);
+            if (step) {
+                sendEvent({
+                    step,
+                    total: 5,
+                    message: line,
+                    status: 'processing'
+                });
+            }
+        }
+    });
+
+    pyProg.stderr.on('data', (chunk) => {
+        errorOutput += chunk.toString();
+    });
+
+    pyProg.on('error', (err) => {
+        if (!isFinished) {
+            isFinished = true;
+            console.error('Python spawn error:', err);
+            sendEvent({ status: 'error', error: `Could not start Python: ${err.message}` });
+            res.end();
+        }
+    });
+
+    pyProg.on('close', (code) => {
+        if (isFinished) return;
+        isFinished = true;
+        if (stdoutBuffer.trim()) {
+            const remainingLine = stdoutBuffer.trim();
+            if (/^(error|exception|fail)/i.test(remainingLine)) {
+                lastStdoutError = remainingLine;
+            }
+            const step = parseStepFromLog(remainingLine);
+            if (step) {
+                sendEvent({
+                    step,
+                    total: 5,
+                    message: remainingLine,
+                    status: 'processing'
+                });
+            }
+        }
+        if (code === 0 && fs.existsSync(outputPath)) {
+            sendEvent({
+                step: 5,
+                total: 5,
+                status: 'complete',
+                image_url: `/static/generated/forge_${filename}`
+            });
+        } else {
+            const errMsg = errorOutput.trim() || lastStdoutError || `Python process exited with code ${code}`;
+            console.error(`Python smoothing failed (${code}): ${errMsg}`);
+            sendEvent({
+                status: 'error',
+                error: errMsg
+            });
+        }
+        res.end();
+    });
+};
+
+app.get('/api/postprocess-stream', handlePostprocessStream);
+app.post('/api/postprocess-stream', handlePostprocessStream);
+
 app.post('/api/remove_bg', async (req, res) => {
     const rawUrl = typeof req.body?.image_url === 'string' ? req.body.image_url.trim() : '';
-    const filename = path.basename(rawUrl);
-    if (!rawUrl || !filename) return res.status(400).json({ error: 'Missing image_url.' });
+    const cleanUrl = rawUrl.split('?')[0].split('#')[0];
+    const filename = path.basename(cleanUrl);
+    if (!rawUrl || !filename || filename === '.' || filename === '..') return res.status(400).json({ error: 'Missing image_url.' });
     const inputPath = path.join(generatedDir, filename);
-    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'Image not found on server.' });
+    if (!fs.existsSync(inputPath) || !fs.statSync(inputPath).isFile()) return res.status(404).json({ error: 'Image not found on server.' });
     try {
         const outputPath = path.join(generatedDir, `iso_${filename}`);
         await runPythonProcessor('remove_bg', [inputPath, outputPath]);
@@ -196,10 +380,11 @@ app.post('/api/remove_bg', async (req, res) => {
 
 app.post('/api/invert', async (req, res) => {
     const rawUrl = typeof req.body?.image_url === 'string' ? req.body.image_url.trim() : '';
-    const filename = path.basename(rawUrl);
-    if (!rawUrl || !filename) return res.status(400).json({ error: 'Missing image_url.' });
+    const cleanUrl = rawUrl.split('?')[0].split('#')[0];
+    const filename = path.basename(cleanUrl);
+    if (!rawUrl || !filename || filename === '.' || filename === '..') return res.status(400).json({ error: 'Missing image_url.' });
     const inputPath = path.join(generatedDir, filename);
-    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'Image not found on server.' });
+    if (!fs.existsSync(inputPath) || !fs.statSync(inputPath).isFile()) return res.status(404).json({ error: 'Image not found on server.' });
     try {
         const outputPath = path.join(generatedDir, `inv_${filename}`);
         await runPythonProcessor('invert', [inputPath, outputPath]);
@@ -273,8 +458,9 @@ app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) =>
 });
 
 let server;
-if (process.env.NODE_ENV !== 'test') {
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (process.env.NODE_ENV !== 'test' && isDirectRun) {
     server = app.listen(port, '0.0.0.0', () => console.log(`DepthForge running on http://0.0.0.0:${port}`));
 }
 
-export { app, server, sanitizeAspectRatio, ALLOWED_ASPECT_RATIOS, ai };
+export { app, server, sanitizeAspectRatio, ALLOWED_ASPECT_RATIOS, ai, parseStepFromLog, runPythonProcessor, spawnPythonProcessor, handlePostprocessStream };
