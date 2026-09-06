@@ -472,8 +472,16 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ prompt, aspectRatio, depth_intensity: depthIntensity, depthIntensity }) /* body: JSON.stringify({ prompt, aspectRatio }) */
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Generation failed');
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (jsonErr) {
+                    data = null;
+                }
+                if (res.status === 429) {
+                    throw new Error(data?.error || 'Too many requests. Please wait before generating again.');
+                }
+                if (!res.ok) throw new Error(data?.error || 'Generation failed');
                 
                 displayImageSuccess(data.image_url);
                 savePromptToHistory(prompt);
@@ -524,8 +532,16 @@
                     method: 'POST',
                     body: formData
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Conversion failed');
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (jsonErr) {
+                    data = null;
+                }
+                if (res.status === 429) {
+                    throw new Error(data?.error || 'Too many requests. Please wait before generating again.');
+                }
+                if (!res.ok) throw new Error(data?.error || 'Conversion failed');
                 
                 displayImageSuccess(data.image_url);
                 addToGallery(data.image_url, 'Photo to Depth');

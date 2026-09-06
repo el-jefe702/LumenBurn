@@ -32,8 +32,24 @@ object ApiClient {
         conn.connectTimeout = 60000
         conn.readTimeout = 120000
         OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
-        val responseText = conn.inputStream.bufferedReader().readText()
-        JSONObject(responseText)
+        val responseCode = conn.responseCode
+        val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+        val responseText = stream?.bufferedReader()?.use { it.readText() } ?: "{}"
+        val json = try {
+            JSONObject(responseText)
+        } catch (e: Exception) {
+            JSONObject().put("error", "HTTP $responseCode: $responseText")
+        }
+        if (responseCode == 429) {
+            val currentErr = json.optString("error", "")
+            if (currentErr.isEmpty() || currentErr.startsWith("HTTP 429")) {
+                json.put("error", "Too many requests. Please wait before generating again.")
+            }
+        }
+        if (!json.has("statusCode")) {
+            json.put("statusCode", responseCode)
+        }
+        json
     }
 
     // POST multipart file — uses OkHttp to correctly handle binary data
@@ -65,8 +81,29 @@ object ApiClient {
             .build()
 
         val response = client.newCall(request).execute()
+        val statusCode = response.code
         val responseText = response.body?.string() ?: "{}"
-        JSONObject(responseText)
+        val json = try {
+            JSONObject(responseText)
+        } catch (e: Exception) {
+            JSONObject().put("error", "HTTP $statusCode: ${response.message}")
+        }
+        if (statusCode == 429) {
+            val currentErr = json.optString("error", "")
+            if (currentErr.isEmpty() || currentErr.startsWith("HTTP 429")) {
+                json.put("error", "Too many requests. Please wait before generating again.")
+            }
+        }
+        if (!json.has("statusCode")) {
+            json.put("statusCode", statusCode)
+        }
+        json
+    }
+
+    // Check if a response indicates rate limiting (HTTP 429)
+    fun isRateLimited(response: JSONObject): Boolean {
+        return response.optInt("statusCode") == 429 ||
+               response.optString("error").contains("Too many requests", ignoreCase = true)
     }
 
     // Download image as Bitmap

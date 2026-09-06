@@ -521,10 +521,27 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                                 sessionGallery = updatedGallery
                                                 activeGalleryItemId = newItem.id
                                             } else {
-                                                lastError = "Generation failed"
+                                                val errorMsg = if (ApiClient.isRateLimited(res)) {
+                                                    val serverError = res.optString("error")
+                                                    if (serverError.isBlank() || serverError.startsWith("HTTP 429")) {
+                                                        "Too many requests. Please wait before generating again."
+                                                    } else {
+                                                        serverError
+                                                    }
+                                                } else {
+                                                    res.optString("error").ifEmpty { "Generation failed" }
+                                                }
+                                                lastError = errorMsg
+                                                coroutineScope.launch {
+                                                    scaffoldState.snackbarHostState.showSnackbar(errorMsg)
+                                                }
                                             }
                                         } catch (e: Exception) {
-                                            lastError = e.message ?: "Unknown error"
+                                            val errorMsg = e.message ?: "Unknown error"
+                                            lastError = errorMsg
+                                            coroutineScope.launch {
+                                                scaffoldState.snackbarHostState.showSnackbar(errorMsg)
+                                            }
                                         } finally {
                                             isGenerating = false
                                         }
@@ -599,10 +616,27 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                                     sessionGallery = updatedGallery
                                                     activeGalleryItemId = newItem.id
                                                 } else {
-                                                    lastError = "Conversion failed"
+                                                    val errorMsg = if (ApiClient.isRateLimited(res)) {
+                                                        val serverError = res.optString("error")
+                                                        if (serverError.isBlank() || serverError.startsWith("HTTP 429")) {
+                                                            "Too many requests. Please wait before generating again."
+                                                        } else {
+                                                            serverError
+                                                        }
+                                                    } else {
+                                                        res.optString("error").ifEmpty { "Conversion failed" }
+                                                    }
+                                                    lastError = errorMsg
+                                                    coroutineScope.launch {
+                                                        scaffoldState.snackbarHostState.showSnackbar(errorMsg)
+                                                    }
                                                 }
                                             } catch (e: Exception) {
-                                                lastError = e.message ?: "Error reading file"
+                                                val errorMsg = e.message ?: "Error reading file"
+                                                lastError = errorMsg
+                                                coroutineScope.launch {
+                                                    scaffoldState.snackbarHostState.showSnackbar(errorMsg)
+                                                }
                                             } finally {
                                                 isGenerating = false
                                             }

@@ -7,6 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 import { spawn, spawnSync } from 'child_process';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
@@ -26,6 +27,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 8000;
+
+if (process.env.TRUST_PROXY) {
+    const tpVal = process.env.TRUST_PROXY.trim().toLowerCase();
+    app.set('trust proxy', tpVal === 'true' ? true : (tpVal === 'false' ? false : (isNaN(Number(tpVal)) ? process.env.TRUST_PROXY : Number(tpVal))));
+}
 
 // Ensure directories exist
 const staticDir = path.join(__dirname, 'static');
@@ -64,6 +70,92 @@ const ai = new GoogleGenAI({
 });
 if (!process.env.GEMINI_API_KEY) {
     console.warn("WARNING: GEMINI_API_KEY is missing from .env! Image generation will fail.");
+}
+
+// ----------------------------------------------------------------------
+// Rate Limiting Configuration (F10)
+// ----------------------------------------------------------------------
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 900000; // 15 minutes (15 * 60 * 1000)
+const DEFAULT_RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_ERROR_MESSAGE = 'Too many requests. Please wait before generating again.';
+const RATE_LIMIT_RESPONSE_BODY = { error: RATE_LIMIT_ERROR_MESSAGE };
+
+function parseRateLimitWindowMs(val) {
+    if (val === undefined || val === null || val === '') return DEFAULT_RATE_LIMIT_WINDOW_MS;
+    const num = Number(val);
+    if (Number.isFinite(num) && num > 0) {
+        return Math.floor(num);
+    }
+    const parsed = parseInt(val, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_RATE_LIMIT_WINDOW_MS;
+}
+
+function parseRateLimitMax(val) {
+    if (val === undefined || val === null || val === '') return DEFAULT_RATE_LIMIT_MAX;
+    const num = Number(val);
+    if (Number.isFinite(num) && num >= 0) {
+        return Math.floor(num);
+    }
+    const parsed = parseInt(val, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_RATE_LIMIT_MAX;
+}
+
+function createRateLimiter(options = {}) {
+    const { shared, separate, ...rlOptions } = options;
+    const windowMs = rlOptions.windowMs !== undefined
+        ? parseRateLimitWindowMs(rlOptions.windowMs)
+        : parseRateLimitWindowMs(process.env.RATE_LIMIT_WINDOW_MS);
+
+    const limit = rlOptions.max !== undefined
+        ? parseRateLimitMax(rlOptions.max)
+        : (rlOptions.limit !== undefined
+            ? (typeof rlOptions.limit === 'function' ? rlOptions.limit : parseRateLimitMax(rlOptions.limit))
+            : () => parseRateLimitMax(process.env.RATE_LIMIT_MAX));
+
+    return rateLimit({
+        windowMs,
+        limit,
+        standardHeaders: true,
+        legacyHeaders: true,
+        statusCode: 429,
+        message: RATE_LIMIT_RESPONSE_BODY,
+        handler: (req, res, next, opts) => {
+            res.status(opts.statusCode || 429).json(RATE_LIMIT_RESPONSE_BODY);
+        },
+        validate: { trustProxy: false, xForwardedForHeader: false, limit: false, default: true },
+        ...rlOptions,
+        statusCode: 429,
+        message: RATE_LIMIT_RESPONSE_BODY
+    });
+}
+
+const createGenerationLimiter = createRateLimiter;
+
+let activeGenerateLimiter = createRateLimiter();
+let activePhotoToDepthLimiter = createRateLimiter();
+
+const generateLimiter = (req, res, next) => activeGenerateLimiter(req, res, next);
+const photoToDepthLimiter = (req, res, next) => activePhotoToDepthLimiter(req, res, next);
+const generationLimiter = generateLimiter;
+
+function resetRateLimiters(options = {}) {
+    if (options.shared) {
+        const sharedLimiter = createRateLimiter(options);
+        activeGenerateLimiter = sharedLimiter;
+        activePhotoToDepthLimiter = sharedLimiter;
+    } else {
+        activeGenerateLimiter = createRateLimiter(options);
+        activePhotoToDepthLimiter = createRateLimiter(options);
+    }
+    return {
+        generateLimiter: activeGenerateLimiter,
+        photoToDepthLimiter: activePhotoToDepthLimiter,
+        generationLimiter: activeGenerateLimiter
+    };
+}
+
+function resetGenerationLimiter(options = {}) {
+    return resetRateLimiters(options);
 }
 
 // ----------------------------------------------------------------------
@@ -316,7 +408,7 @@ app.route('/api/health')
         });
     });
 
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', generateLimiter, async (req, res) => {
     console.log(`[${new Date().toLocaleTimeString()}] 🚀 POST /api/generate - Starting generation...`);
     try {
         const studentPrompt = req.body.prompt || "";
@@ -541,7 +633,7 @@ app.post('/api/invert', async (req, res) => {
     }
 });
 
-app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) => {
+app.post('/api/photo-to-depth', photoToDepthLimiter, photoUpload.single('photo'), async (req, res) => {
     const uploadedPath = req.file?.path;
     try {
         if (!req.file) return res.status(400).json({ error: 'No photo uploaded.' });
@@ -657,5 +749,18 @@ export {
     getPackageVersion,
     resolvePythonExecutable,
     isPythonAvailable,
-    clearPythonCache
+    clearPythonCache,
+    DEFAULT_RATE_LIMIT_WINDOW_MS,
+    DEFAULT_RATE_LIMIT_MAX,
+    RATE_LIMIT_ERROR_MESSAGE,
+    RATE_LIMIT_RESPONSE_BODY,
+    parseRateLimitWindowMs,
+    parseRateLimitMax,
+    createRateLimiter,
+    createGenerationLimiter,
+    generateLimiter,
+    photoToDepthLimiter,
+    generationLimiter,
+    resetRateLimiters,
+    resetGenerationLimiter
 };

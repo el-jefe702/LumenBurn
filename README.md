@@ -26,6 +26,7 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 - **Side-by-Side Comparison View (F7)**: Interactive split-screen comparison mode showing "Before" and "After" depth maps side-by-side with a draggable vertical divider slider. Activates automatically or via the "⚖️ Compare" action button after any post-processing operation (Invert, Remove BG, Polish for CNC). Features high-contrast badges (Orange "Before", Indigo "After" with smooth edge fading), polygon clip-path rendering, unified PointerEvents drag (supporting mouse, multi-touch, and pen/stylus inputs with `touch-action: none`), complete keyboard slider accessibility (Left/Right/Home/End/PageUp/PageDown and `Escape` key dismissal), deadlock-free lifecycle teardown across view exits, window blur focus-loss protection, and a quick "✕ Close Comparison" / "👁️ Normal View" toggle.
 - **Automatic Generated File Cleanup (F8)**: Automated background maintenance routine executing on server startup and hourly intervals. Automatically scans `static/generated/` and purges depth maps older than `GENERATED_TTL_HOURS` (defaulting to 24 hours) while preserving fresh images within the TTL window. Handles missing directories, empty folders, locked files, and non-file system artifacts gracefully without crashing, logging execution summaries cleanly to stdout.
 - **Health Check Endpoint (F9)**: Production health check endpoint at `GET /api/health` returning HTTP 200 with dynamic `package.json` version resolution (BOM- and corruption-resilient), non-blocking TTL-cached Python and `processor.py` engine availability verification, process uptime, strict anti-caching HTTP headers (`Cache-Control: no-store, no-cache...`), and ISO timestamp. Supports `HEAD` and `OPTIONS` probes, returning `405 Method Not Allowed` with `Allow: GET, HEAD, OPTIONS` on disallowed methods. Fully integrated with Docker Compose container monitoring and Android `ApiClient.checkHealth()` / `isHealthy()` with malformed URL and non-JSON proxy error resilience.
+- **Rate Limiting (F10)**: Configurable IP-based rate limiting protecting AI generation routes (`POST /api/generate` and `POST /api/photo-to-depth`) via `express-rate-limit`. Defaults to 10 requests per 15-minute window per IP, configurable via `RATE_LIMIT_WINDOW_MS` (default `900000` ms = 15 minutes) and `RATE_LIMIT_MAX` (default `10`). When exceeded, returns HTTP 429 Too Many Requests with JSON payload `{"error": "Too many requests. Please wait before generating again."}` and standard rate limit headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-After`). Non-generation routes (`/api/health`, `/api/postprocess`, `/api/postprocess-stream`, `/api/invert`, `/api/remove_bg`, `/api/lumenburn/convert`, and all `/static/` assets) remain completely unthrottled. Handled cleanly in Web UI with user alerts and in Android with native snackbars and error state.
 - **Background Removal**: Isolate subjects onto pure black backgrounds with `rembg`
 - **Lossless Export**: Export production-ready 16-bit PNG depth maps
 
@@ -49,8 +50,8 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 │  Express Server (server.js)  — Port 8000                         │
 │                                                                  │
 │  GET  /api/health              → Health status, version & Python │
-│  POST /api/generate            → Gemini + Imagen 4 (aspectRatio, depth_intensity) │
-│  POST /api/photo-to-depth      → Gemini Vision + Imagen 4 (depth_intensity)       │
+│  POST /api/generate            → Gemini + Imagen 4 (rate limited: 10/15m)         │
+│  POST /api/photo-to-depth      → Gemini Vision + Imagen 4 (rate limited: 10/15m)  │
 │  POST /api/invert              → spawns processor.py invert      │
 │  GET  /api/postprocess-stream  → spawns processor.py smooth (SSE)│
 │  POST /api/remove_bg           → spawns processor.py remove_bg   │
@@ -96,6 +97,11 @@ pip install opencv-python numpy rembg
 echo "GEMINI_API_KEY=your_key_here" > .env
 # Optional: customize generated file TTL in hours (default: 24)
 # echo "GENERATED_TTL_HOURS=24" >> .env
+# Optional: customize AI generation rate limiting (defaults: 10 requests per 15-minute window per IP)
+# echo "RATE_LIMIT_WINDOW_MS=900000" >> .env
+# echo "RATE_LIMIT_MAX=10" >> .env
+# Optional: trust reverse proxy headers (e.g., Nginx, Cloudflare, Docker) for accurate client IP rate limiting
+# echo "TRUST_PROXY=true" >> .env
 
 # Start the server (runs initial cleanup and schedules hourly maintenance)
 npm start
@@ -118,8 +124,8 @@ node cleanup.js [dir] [ttlHours] # Run generated file cleanup manually via CLI (
 | Endpoint | Method | Body / Params | Response | Description |
 |---|---|---|---|---|
 | `/api/health` | GET, HEAD, OPTIONS | None | `{"status": "ok", "version": "2.0.0", "python": true, "uptime": 12.34, "timestamp": "..."}` | Returns service health status, dynamic package.json version, Python engine availability, uptime, and timestamp. Disallowed methods (POST, PUT, DELETE, PATCH) return 405 Method Not Allowed with Allow header. |
-| `/api/generate` | POST | `{"prompt": "...", "aspectRatio": "1:1", "depth_intensity": 70}` | `{"status": "success", "image_url": "/static/generated/xxx.png"}` | Generates depth map from text prompt. `aspectRatio` defaults to `1:1` (`1:1`, `4:3`, `3:2`, `16:9`, `2:3`). `depth_intensity` (0–100) defaults to `70`. |
-| `/api/photo-to-depth` | POST | Multipart `photo` file, optional `aspectRatio`, optional `depth_intensity` | `{"status": "success", "image_url": "...", "subject": "..."}` | Analyzes photo and generates depth map with requested aspect ratio and depth intensity (default 70). |
+| `/api/generate` | POST | `{"prompt": "...", "aspectRatio": "1:1", "depth_intensity": 70}` | `{"status": "success", "image_url": "/static/generated/xxx.png"}` (or HTTP 429: `{"error": "..."}`) | Generates depth map from text prompt. `aspectRatio` defaults to `1:1` (`1:1`, `4:3`, `3:2`, `16:9`, `2:3`). `depth_intensity` (0–100) defaults to `70`. Protected by rate limiter (default 10 req / 15 min per IP; configurable via `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS`). |
+| `/api/photo-to-depth` | POST | Multipart `photo` file, optional `aspectRatio`, optional `depth_intensity` | `{"status": "success", "image_url": "...", "subject": "..."}` (or HTTP 429: `{"error": "..."}`) | Analyzes photo and generates depth map with requested aspect ratio and depth intensity (default 70). Protected by rate limiter (default 10 req / 15 min per IP; configurable via `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS`). |
 | `/api/invert` | POST | `{"image_url": "..."}` | `{"status": "success", "image_url": "/static/generated/inv_xxx.png"}` | Inverts depth map pixel values (16-bit or 8-bit). |
 | `/api/postprocess-stream` | GET / POST | `?image_url=...` | `text/event-stream` | Streams 5-step smoothing progress in real-time over SSE. |
 | `/api/remove_bg` | POST | `{"image_url": "..."}` | `{"status": "success", "image_url": "/static/generated/iso_xxx.png"}` | Isolates subject onto pure black background. |
