@@ -23,13 +23,14 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 - **Real-Time Pipeline Progress via SSE (F4)**: Live 5-step progress streaming over Server-Sent Events (`/api/postprocess-stream`)
 - **Session Gallery / History Panel (F5)**: Horizontal scrollable thumbnail strip below the preview area displaying all generated and post-processed versions in the session. Clicking any thumbnail restores that version to the active preview with all action buttons (Invert, Remove BG, Polish, Download) re-targeted to it. Includes Hide/Show and Clear controls, strict concurrency guards blocking race conditions during in-flight network requests, mobile viewport responsiveness down to <360px width, and native touch momentum scrolling.
 - **Depth Intensity Slider (F6)**: Adjust carve depth and relief contrast from 0 to 100% (default 70%). Modulates prompts dynamically: 0–30% produces gentle, shallow relief with subtle height transitions; 31–69% applies standard relief depth; 70–100% generates dramatic, maximum-depth carving with extreme black-to-white contrast. Includes full WCAG 2.1 AA accessibility (ARIA value indicators, title tooltips, keyboard focus states) and automatic panel synchronization.
+- **Side-by-Side Comparison View (F7)**: Interactive split-screen comparison mode showing "Before" and "After" depth maps side-by-side with a draggable vertical divider slider. Activates automatically or via the "⚖️ Compare" action button after any post-processing operation (Invert, Remove BG, Polish for CNC). Features high-contrast badges (Orange "Before", Indigo "After" with smooth edge fading), polygon clip-path rendering, unified PointerEvents drag (supporting mouse, multi-touch, and pen/stylus inputs with `touch-action: none`), complete keyboard slider accessibility (Left/Right/Home/End/PageUp/PageDown and `Escape` key dismissal), deadlock-free lifecycle teardown across view exits, window blur focus-loss protection, and a quick "✕ Close Comparison" / "👁️ Normal View" toggle.
 - **Background Removal**: Isolate subjects onto pure black backgrounds with `rembg`
 - **Lossless Export**: Export production-ready 16-bit PNG depth maps
 
 ### Platforms
 
-- **Web**: Single-page static frontend served from Express with built-in aspect ratio selector, depth intensity slider, prompt history, session gallery, real-time SSE progress, and action controls
-- **Android**: Native Jetpack Compose app (single-screen forge with native chips, depth intensity slider, prompt history dropdown, session gallery LazyRow, real-time SSE animation, and action controls)
+- **Web**: Single-page static frontend served from Express with built-in aspect ratio selector, depth intensity slider, prompt history, session gallery, side-by-side comparison view, real-time SSE progress, and action controls
+- **Android**: Native Jetpack Compose app (single-screen forge with native chips, depth intensity slider, prompt history dropdown, session gallery LazyRow, before/after comparison split view with draggable divider, real-time SSE animation, and action controls)
 
 ---
 

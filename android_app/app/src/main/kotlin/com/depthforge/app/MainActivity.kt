@@ -12,12 +12,16 @@ import android.provider.MediaStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -35,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +64,7 @@ val IndigoAccent = Color(0xFF6366F1)
 val EmeraldAccent = Color(0xFF10B981)
 val PinkAccent = Color(0xFFEC4899)
 val OrangeAccent = Color(0xFFFF6B35)
+val CyanAccent = Color(0xFF0891B2)
 val GrayBorder = Color(0xFF2A2A3A)
 
 @Composable
@@ -297,6 +303,11 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
     var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var currentImageUrl by remember { mutableStateOf("") }
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var beforeImageUrl by remember { mutableStateOf<String?>(null) }
+    var beforeBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var afterImageUrl by remember { mutableStateOf<String?>(null) }
+    var isComparing by remember { mutableStateOf(false) }
+    var comparisonSplit by remember { mutableStateOf(0.5f) }
     var sessionGallery by remember { mutableStateOf<List<SessionGalleryItem>>(emptyList()) }
     var activeGalleryItemId by remember { mutableStateOf<String?>(null) }
     var isGalleryVisible by remember { mutableStateOf(true) }
@@ -315,6 +326,10 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
 
     val coroutineScope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
+
+    BackHandler(enabled = isComparing) {
+        isComparing = false
+    }
 
     LaunchedEffect(activeGalleryItemId) {
         if (activeGalleryItemId != null) {
@@ -483,6 +498,10 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                     lastError = null
                                     currentImageUrl = ""
                                     currentBitmap = null
+                                    beforeImageUrl = null
+                                    beforeBitmap = null
+                                    afterImageUrl = null
+                                    isComparing = false
                                     isPolished = false
                                     bgRemoved = false
                                     
@@ -552,6 +571,10 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                         lastError = null
                                         currentImageUrl = ""
                                         currentBitmap = null
+                                        beforeImageUrl = null
+                                        beforeBitmap = null
+                                        afterImageUrl = null
+                                        isComparing = false
                                         isPolished = false
                                         bgRemoved = false
                                         
@@ -627,6 +650,13 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                 Text("Inverting Depth Map...", color = TextPrimary)
                             }
                         }
+                        isRemovingBg -> {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = PinkAccent)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("Isolating Subject...", color = TextPrimary)
+                            }
+                        }
                         isPolishing -> {
                             // Pipeline step animation overlay
                             Column(
@@ -666,6 +696,15 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                     }
                                 }
                             }
+                        }
+                        isComparing && beforeBitmap != null && currentBitmap != null -> {
+                            BeforeAfterComparisonView(
+                                beforeBitmap = beforeBitmap!!,
+                                afterBitmap = currentBitmap!!,
+                                splitFraction = comparisonSplit,
+                                onSplitChange = { comparisonSplit = it },
+                                onClose = { isComparing = false }
+                            )
                         }
                         currentBitmap != null -> {
                             Image(
@@ -718,6 +757,10 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                         sessionGallery = SessionGalleryManager.clear()
                                         activeGalleryItemId = null
                                         isGalleryVisible = true
+                                        beforeImageUrl = null
+                                        beforeBitmap = null
+                                        afterImageUrl = null
+                                        isComparing = false
                                     },
                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                                     modifier = Modifier.height(28.dp),
@@ -752,6 +795,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                                 activeGalleryItemId = item.id
                                                 currentImageUrl = item.imageUrl
                                                 currentBitmap = item.bitmap
+                                                isComparing = false
                                                 isPolished = false
                                                 bgRemoved = false
                                                 if (item.bitmap == null && item.imageUrl.isNotBlank()) {
@@ -814,6 +858,10 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                             onClick = {
                                 currentImageUrl = ""
                                 currentBitmap = null
+                                beforeImageUrl = null
+                                beforeBitmap = null
+                                afterImageUrl = null
+                                isComparing = false
                                 activeGalleryItemId = null
                                 isPolished = false
                                 bgRemoved = false
@@ -825,15 +873,37 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                             Text("Discard")
                         }
 
+                        if (beforeBitmap != null && currentBitmap != null) {
+                            if (currentImageUrl == afterImageUrl) {
+                                Button(
+                                    onClick = { isComparing = !isComparing },
+                                    colors = ButtonDefaults.buttonColors(
+                                        backgroundColor = if (isComparing) GoldAccent else CyanAccent
+                                    ),
+                                    enabled = !isBusy
+                                ) {
+                                    Text(
+                                        text = if (isComparing) "Normal" else "Compare",
+                                        color = if (isComparing) DarkBackground else TextPrimary
+                                    )
+                                }
+                            }
+                        }
+
                         Button(
                             onClick = {
                                 isInverting = true
                                 lastError = null
+                                val preUrl = currentImageUrl
+                                val preBitmap = currentBitmap
                                 coroutineScope.launch {
                                     try {
                                         val res = ApiClient.invert(currentImageUrl)
                                         if (res.optString("status") == "success") {
+                                            beforeImageUrl = preUrl
+                                            beforeBitmap = preBitmap
                                             currentImageUrl = res.getString("image_url")
+                                            afterImageUrl = currentImageUrl
                                             currentBitmap = ApiClient.downloadImage(currentImageUrl)
                                             val (updatedGallery, newItem) = SessionGalleryManager.addItem(
                                                 sessionGallery,
@@ -863,11 +933,16 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                             Button(
                                 onClick = {
                                     isRemovingBg = true
+                                    val preUrl = currentImageUrl
+                                    val preBitmap = currentBitmap
                                     coroutineScope.launch {
                                         try {
                                             val res = ApiClient.removeBg(currentImageUrl)
                                             if (res.optString("status") == "success") {
+                                                beforeImageUrl = preUrl
+                                                beforeBitmap = preBitmap
                                                 currentImageUrl = res.getString("image_url")
+                                                afterImageUrl = currentImageUrl
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)
                                                 bgRemoved = true
                                                 val (updatedGallery, newItem) = SessionGalleryManager.addItem(
@@ -902,6 +977,8 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                 isPolishing = true
                                 activePolishStep = 0
                                 lastError = null
+                                val preUrl = currentImageUrl
+                                val preBitmap = currentBitmap
                                 coroutineScope.launch {
                                     try {
                                         val res = ApiClient.postprocessStream(currentImageUrl) { step, _ ->
@@ -910,7 +987,10 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                         if (res.optString("status") == "complete" || res.has("image_url")) {
                                             val newUrl = res.optString("image_url")
                                             if (newUrl.isNotBlank()) {
+                                                beforeImageUrl = preUrl
+                                                beforeBitmap = preBitmap
                                                 currentImageUrl = newUrl
+                                                afterImageUrl = currentImageUrl
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)
                                                 isPolished = true
                                                 val (updatedGallery, newItem) = SessionGalleryManager.addItem(
@@ -985,6 +1065,175 @@ private fun saveImageToGallery(context: Context, bitmap: Bitmap, title: String) 
         resolver.openOutputStream(uri).use { stream ->
             if (stream != null) {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            }
+        }
+    }
+}
+
+@Composable
+fun BeforeAfterComparisonView(
+    beforeBitmap: Bitmap,
+    afterBitmap: Bitmap,
+    splitFraction: Float,
+    onSplitChange: (Float) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.Black)
+    ) {
+        val totalWidth = maxWidth
+        val totalHeight = maxHeight
+        val splitWidth = totalWidth * splitFraction.coerceIn(0f, 1f)
+        val totalPx = with(LocalDensity.current) { totalWidth.toPx() }
+
+        // Comparison Interactive Surface (supports dragging anywhere)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta ->
+                        if (totalPx > 0f) {
+                            val newFraction = (splitFraction + delta / totalPx).coerceIn(0f, 1f)
+                            onSplitChange(newFraction)
+                        }
+                    }
+                )
+        ) {
+            // Before Image (Left / Base layer)
+            Box(modifier = Modifier.fillMaxSize()) {
+                Image(
+                    bitmap = beforeBitmap.asImageBitmap(),
+                    contentDescription = "Before Map",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // After Image (Right / Clipped overlay)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(object : androidx.compose.ui.graphics.Shape {
+                        override fun createOutline(
+                            size: androidx.compose.ui.geometry.Size,
+                            layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                            density: androidx.compose.ui.unit.Density
+                        ): androidx.compose.ui.graphics.Outline {
+                            val leftCut = size.width * splitFraction.coerceIn(0f, 1f)
+                            return androidx.compose.ui.graphics.Outline.Rectangle(
+                                androidx.compose.ui.geometry.Rect(
+                                    left = leftCut,
+                                    top = 0f,
+                                    right = size.width,
+                                    bottom = size.height
+                                )
+                            )
+                        }
+                    })
+            ) {
+                Image(
+                    bitmap = afterBitmap.asImageBitmap(),
+                    contentDescription = "After Map",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Before label badge (fades out smoothly when split is near 0)
+            val beforeAlpha = (splitFraction / 0.15f).coerceIn(0f, 1f)
+            if (beforeAlpha > 0f) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .alpha(beforeAlpha)
+                        .background(Color(0xCC14141C), RoundedCornerShape(4.dp))
+                        .border(1.dp, OrangeAccent, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Before",
+                        color = OrangeAccent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // After label badge (fades out smoothly when split is near 1)
+            val afterAlpha = ((1f - splitFraction) / 0.15f).coerceIn(0f, 1f)
+            if (afterAlpha > 0f) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .alpha(afterAlpha)
+                        .background(Color(0xCC14141C), RoundedCornerShape(4.dp))
+                        .border(1.dp, IndigoAccent, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "After",
+                        color = IndigoAccent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Draggable vertical divider handle
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(48.dp)
+                    .offset(x = splitWidth - 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Vertical divider line
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(2.dp)
+                        .background(GoldAccent)
+                )
+                // Handle circle indicator
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(CardBackground, RoundedCornerShape(16.dp))
+                        .border(2.dp, GoldAccent, RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "◀▶",
+                        color = GoldAccent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Close Comparison button overlay
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp)
+        ) {
+            Button(
+                onClick = onClose,
+                colors = ButtonDefaults.buttonColors(backgroundColor = CardBackground.copy(alpha = 0.9f)),
+                border = BorderStroke(1.dp, GrayBorder),
+                shape = RoundedCornerShape(16.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.height(30.dp)
+            ) {
+                Text("✕ Close Comparison", color = TextPrimary, fontSize = 11.sp)
             }
         }
     }

@@ -101,6 +101,31 @@
                 
                 <img id="outputImage" class="output-image" alt="Depth Map" style="display: none;">
                 
+                <!-- Side-by-Side / Split Comparison View (F7) -->
+                <div class="comparison-container" id="comparisonContainer" style="display: none;">
+                    <div class="comparison-wrapper" id="comparisonWrapper">
+                        <img id="comparisonBeforeImg" class="comparison-img before-img" alt="Before">
+                        <div class="comparison-overlay" id="comparisonOverlay">
+                            <img id="comparisonAfterImg" class="comparison-img after-img" alt="After">
+                        </div>
+                        <span class="comparison-label label-before" id="comparisonLabelBefore">Before</span>
+                        <span class="comparison-label label-after" id="comparisonLabelAfter">After</span>
+                        
+                        <div class="comparison-slider-handle" id="comparisonSliderHandle" role="slider" aria-label="Comparison Divider" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% Before / 50% After" tabindex="0">
+                            <div class="comparison-handle-line"></div>
+                            <div class="comparison-handle-circle">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-comparison-exit" id="exitComparisonBtn" onclick="exitComparisonView()" title="Exit comparison view">✕ Close Comparison</button>
+                </div>
+
                 <div class="loading-overlay" id="loadingOverlay" style="display: none;">
                     <div class="spinner"></div>
                     <div class="loading-text" id="loadingText">Forging Map in the Cloud...</div>
@@ -132,6 +157,7 @@
 
             <div class="action-bar fade-in" id="actionBar" style="display: none;">
                 <button class="btn btn-outline" id="discardBtn" onclick="if(!isProcessing())location.reload()">Discard</button>
+                <button class="btn btn-action cyan" id="compareBtn" onclick="toggleComparisonView()" style="display: none;">⚖️ Compare</button>
                 <button class="btn btn-action orange" id="invertBtn" onclick="invertDepthMap()">🔄 Invert</button>
                 <button class="btn btn-action pink" id="removeBgBtn" onclick="removeBg()">✂️ Remove BG</button>
                 <button class="btn btn-action indigo" id="polishBtn" onclick="polishRelief()">✨ Polish for CNC</button>
@@ -148,6 +174,12 @@
         let currentImageUrl = '';
         let currentMode = 'text';
         let selectedPhotoFile = null;
+        let comparisonBeforeUrl = '';
+        let comparisonAfterUrl = '';
+        let isComparisonActive = false;
+        let comparisonSplit = 50;
+        let isDraggingComparison = false;
+        let stopComparisonDrag = function() {};
 
         // Drop zone logic
         const dropZone = document.getElementById('dropZone');
@@ -256,13 +288,35 @@
             if (isProcessing()) return;
             const item = sessionGallery.find(it => it.id === id);
             if (!item) return;
+            if (isComparisonActive) {
+                exitComparisonView();
+            }
             activeGalleryItemId = id;
             displayImageSuccess(item.url);
+            if (comparisonBeforeUrl && comparisonAfterUrl && item.url === comparisonAfterUrl) {
+                showComparisonOption();
+            } else {
+                const compareBtn = document.getElementById('compareBtn');
+                if (compareBtn) compareBtn.style.display = 'none';
+            }
             renderGallery();
         }
 
         function clearGallery() {
             if (isProcessing()) return;
+            if (isComparisonActive) {
+                exitComparisonView();
+            }
+            comparisonBeforeUrl = '';
+            comparisonAfterUrl = '';
+            const compareBtn = document.getElementById('compareBtn');
+            if (compareBtn) {
+                compareBtn.style.display = 'none';
+                compareBtn.innerText = '⚖️ Compare';
+                if (compareBtn.classList && typeof compareBtn.classList.remove === 'function') {
+                    compareBtn.classList.remove('active');
+                }
+            }
             sessionGallery = [];
             activeGalleryItemId = null;
             isGalleryHidden = false;
@@ -393,6 +447,14 @@
                 return;
             }
 
+            if (isComparisonActive) {
+                exitComparisonView();
+            }
+            comparisonBeforeUrl = '';
+            comparisonAfterUrl = '';
+            const initialCompareBtn = document.getElementById('compareBtn');
+            if (initialCompareBtn) initialCompareBtn.style.display = 'none';
+
             const aspectRatio = document.getElementById('aspectRatioSelect')?.value || '1:1';
             const parsedDepth = parseInt(document.getElementById('depthIntensity')?.value ?? '70', 10);
             const depthIntensity = Number.isNaN(parsedDepth) ? 70 : Math.max(0, Math.min(100, parsedDepth));
@@ -427,6 +489,14 @@
 
         async function convertPhoto() {
             if (isProcessing() || !selectedPhotoFile) return;
+
+            if (isComparisonActive) {
+                exitComparisonView();
+            }
+            comparisonBeforeUrl = '';
+            comparisonAfterUrl = '';
+            const initialCompareBtn = document.getElementById('compareBtn');
+            if (initialCompareBtn) initialCompareBtn.style.display = 'none';
 
             const aspectRatio = document.getElementById('photoAspectRatioSelect')?.value || '1:1';
             const parsedPhotoDepth = parseInt(document.getElementById('photoDepthIntensity')?.value ?? document.getElementById('depthIntensity')?.value ?? '70', 10);
@@ -482,6 +552,7 @@
             document.getElementById('loadingOverlay').style.display = 'flex';
 
             try {
+                const preUrl = currentImageUrl;
                 const res = await fetch('/api/remove_bg', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -490,11 +561,14 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Remove BG failed');
                 
+                comparisonBeforeUrl = preUrl;
+                comparisonAfterUrl = data.image_url;
                 currentImageUrl = data.image_url;
                 document.getElementById('outputImage').src = currentImageUrl;
                 document.getElementById('downloadBtn').href = currentImageUrl;
                 btn.style.display = 'none';
                 addToGallery(data.image_url, 'Remove BG');
+                showComparisonOption();
             } catch (err) {
                 alert(err.message);
                 btn.disabled = false;
@@ -518,6 +592,7 @@
             document.getElementById('loadingOverlay').style.display = 'flex';
 
             try {
+                const preUrl = currentImageUrl;
                 const res = await fetch('/api/invert', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -526,10 +601,13 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Invert failed');
 
+                comparisonBeforeUrl = preUrl;
+                comparisonAfterUrl = data.image_url;
                 currentImageUrl = data.image_url;
                 document.getElementById('outputImage').src = currentImageUrl;
                 document.getElementById('downloadBtn').href = currentImageUrl;
                 addToGallery(data.image_url, 'Invert');
+                showComparisonOption();
             } catch (err) {
                 alert(err.message);
             } finally {
@@ -556,6 +634,7 @@
 
         async function polishRelief() {
             if (isProcessing() || !currentImageUrl) return;
+            const preUrl = currentImageUrl;
 
             const btn = document.getElementById('polishBtn');
             const invertBtn = document.getElementById('invertBtn');
@@ -625,6 +704,8 @@
                                 const stepEl = document.getElementById('step' + i);
                                 if (stepEl) stepEl.className = 'pipeline-step done';
                             }
+                            comparisonBeforeUrl = preUrl;
+                            comparisonAfterUrl = data.image_url;
                             currentImageUrl = data.image_url;
                             document.getElementById('outputImage').src = currentImageUrl;
                             document.getElementById('downloadBtn').href = currentImageUrl;
@@ -637,6 +718,7 @@
                             if (invertBtn) invertBtn.disabled = false;
                             if (removeBgBtn) removeBgBtn.disabled = false;
                             addToGallery(data.image_url, 'Polished');
+                            showComparisonOption();
                         }
                     } catch (e) {
                         console.error('Error parsing SSE event:', e);
@@ -658,6 +740,255 @@
                 btn.disabled = false;
                 if (invertBtn) invertBtn.disabled = false;
                 if (removeBgBtn) removeBgBtn.disabled = false;
+            }
+        }
+
+        // ==========================================
+        // Side-by-Side Comparison View (F7)
+        // ==========================================
+        function showComparisonOption() {
+            const compareBtn = document.getElementById('compareBtn');
+            if (compareBtn && comparisonBeforeUrl && comparisonAfterUrl) {
+                compareBtn.style.display = 'inline-flex';
+                compareBtn.disabled = false;
+                compareBtn.innerText = isComparisonActive ? '👁️ Normal View' : '⚖️ Compare';
+                if (compareBtn.classList && typeof compareBtn.classList.toggle === 'function') {
+                    compareBtn.classList.toggle('active', isComparisonActive);
+                }
+            }
+            const beforeImg = document.getElementById('comparisonBeforeImg');
+            const afterImg = document.getElementById('comparisonAfterImg');
+            if (beforeImg && comparisonBeforeUrl) beforeImg.src = comparisonBeforeUrl;
+            if (afterImg && comparisonAfterUrl) afterImg.src = comparisonAfterUrl;
+            if (isComparisonActive) {
+                setComparisonSplit(comparisonSplit);
+            }
+        }
+
+        function setComparisonSplit(pos) {
+            const numericPos = Number(pos);
+            comparisonSplit = Number.isFinite(numericPos) ? Math.max(0, Math.min(100, numericPos)) : 50;
+
+            const handle = document.getElementById('comparisonSliderHandle');
+            const overlay = document.getElementById('comparisonOverlay');
+            const wrapper = document.getElementById('comparisonWrapper');
+            const labelBefore = document.getElementById('comparisonLabelBefore') || (wrapper && wrapper.querySelector('.label-before'));
+            const labelAfter = document.getElementById('comparisonLabelAfter') || (wrapper && wrapper.querySelector('.label-after'));
+
+            const roundedSplit = Math.round(comparisonSplit);
+            if (handle) {
+                handle.style.left = `${comparisonSplit}%`;
+                if (typeof handle.setAttribute === 'function') {
+                    handle.setAttribute('aria-valuenow', roundedSplit);
+                    handle.setAttribute('aria-valuetext', `${roundedSplit}% Before / ${100 - roundedSplit}% After`);
+                }
+            }
+            if (overlay) {
+                overlay.style.clipPath = `polygon(${comparisonSplit}% 0, 100% 0, 100% 100%, ${comparisonSplit}% 100%)`;
+                overlay.style.webkitClipPath = `polygon(${comparisonSplit}% 0, 100% 0, 100% 100%, ${comparisonSplit}% 100%)`;
+            }
+            if (wrapper && wrapper.style && typeof wrapper.style.setProperty === 'function') {
+                wrapper.style.setProperty('--split-pos', `${comparisonSplit}%`);
+            }
+            if (labelBefore) {
+                labelBefore.style.opacity = comparisonSplit <= 5 ? '0' : (comparisonSplit < 15 ? String((comparisonSplit - 5) / 10) : '1');
+            }
+            if (labelAfter) {
+                labelAfter.style.opacity = comparisonSplit >= 95 ? '0' : (comparisonSplit > 85 ? String((95 - comparisonSplit) / 10) : '1');
+            }
+        }
+
+        function enterComparisonView() {
+            if (isProcessing()) return;
+            if (!comparisonBeforeUrl || !comparisonAfterUrl) return;
+
+            isComparisonActive = true;
+            const compContainer = document.getElementById('comparisonContainer');
+            const outputImage = document.getElementById('outputImage');
+            const placeholder = document.getElementById('placeholder');
+            const compareBtn = document.getElementById('compareBtn');
+            const beforeImg = document.getElementById('comparisonBeforeImg');
+            const afterImg = document.getElementById('comparisonAfterImg');
+
+            if (beforeImg) beforeImg.src = comparisonBeforeUrl;
+            if (afterImg) afterImg.src = comparisonAfterUrl;
+            if (placeholder) placeholder.style.display = 'none';
+            if (outputImage) outputImage.style.display = 'none';
+            if (compContainer) compContainer.style.display = 'flex';
+            if (compareBtn) {
+                compareBtn.innerText = '👁️ Normal View';
+                if (compareBtn.classList && typeof compareBtn.classList.add === 'function') {
+                    compareBtn.classList.add('active');
+                }
+            }
+            setComparisonSplit(comparisonSplit || 50);
+        }
+
+        function exitComparisonView() {
+            isComparisonActive = false;
+            if (typeof stopComparisonDrag === 'function') {
+                stopComparisonDrag();
+            }
+            const compContainer = document.getElementById('comparisonContainer');
+            const outputImage = document.getElementById('outputImage');
+            const compareBtn = document.getElementById('compareBtn');
+
+            if (compContainer) compContainer.style.display = 'none';
+            if (outputImage && currentImageUrl) outputImage.style.display = 'block';
+            if (compareBtn) {
+                compareBtn.innerText = '⚖️ Compare';
+                if (compareBtn.classList && typeof compareBtn.classList.remove === 'function') {
+                    compareBtn.classList.remove('active');
+                }
+            }
+        }
+
+        function toggleComparisonView() {
+            if (isProcessing()) return;
+            if (isComparisonActive) {
+                exitComparisonView();
+            } else {
+                enterComparisonView();
+            }
+        }
+
+        let isComparisonDragInitialized = false;
+        function initComparisonDrag() {
+            if (isComparisonDragInitialized) return;
+            const handle = document.getElementById('comparisonSliderHandle');
+            const wrapper = document.getElementById('comparisonWrapper');
+            if (!handle || !wrapper) return;
+            isComparisonDragInitialized = true;
+
+            function getClientX(e) {
+                if (!e) return 0;
+                if (e.touches && e.touches.length > 0) return e.touches[0].clientX;
+                if (e.changedTouches && e.changedTouches.length > 0) return e.changedTouches[0].clientX;
+                return (typeof e.clientX === 'number') ? e.clientX : 0;
+            }
+
+            function updateFromClientX(clientX) {
+                if (typeof wrapper.getBoundingClientRect !== 'function') return;
+                const rect = wrapper.getBoundingClientRect();
+                if (!rect || rect.width <= 0) return;
+                const offsetX = clientX - rect.left;
+                const pct = (offsetX / rect.width) * 100;
+                setComparisonSplit(pct);
+            }
+
+            function startDrag(e) {
+                if (!isComparisonActive || isDraggingComparison) return;
+                if (e && e.target && typeof e.target.closest === 'function' && e.target.closest('.btn-comparison-exit')) return;
+                isDraggingComparison = true;
+                if (handle.classList && typeof handle.classList.add === 'function') {
+                    handle.classList.add('dragging');
+                }
+                if (e && typeof e.preventDefault === 'function' && (e.cancelable === undefined || e.cancelable)) {
+                    e.preventDefault();
+                }
+                updateFromClientX(getClientX(e));
+
+                window.addEventListener('mousemove', onMouseMove);
+                window.addEventListener('mouseup', endDrag);
+                window.addEventListener('touchmove', onTouchMove, { passive: false });
+                window.addEventListener('touchend', endDrag);
+                window.addEventListener('touchcancel', endDrag);
+                window.addEventListener('pointermove', onPointerMove);
+                window.addEventListener('pointerup', endDrag);
+                window.addEventListener('pointercancel', endDrag);
+                window.addEventListener('blur', endDrag);
+            }
+
+            function onMouseMove(e) {
+                if (!isDraggingComparison) return;
+                updateFromClientX(e.clientX);
+            }
+
+            function onTouchMove(e) {
+                if (!isDraggingComparison) return;
+                if (e && typeof e.preventDefault === 'function' && (e.cancelable === undefined || e.cancelable)) {
+                    e.preventDefault();
+                }
+                updateFromClientX(getClientX(e));
+            }
+
+            function onPointerMove(e) {
+                if (!isDraggingComparison) return;
+                updateFromClientX(e.clientX);
+            }
+
+            function endDrag() {
+                if (!isDraggingComparison) return;
+                isDraggingComparison = false;
+                if (handle.classList && typeof handle.classList.remove === 'function') {
+                    handle.classList.remove('dragging');
+                }
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', endDrag);
+                window.removeEventListener('touchmove', onTouchMove);
+                window.removeEventListener('touchend', endDrag);
+                window.removeEventListener('touchcancel', endDrag);
+                window.removeEventListener('pointermove', onPointerMove);
+                window.removeEventListener('pointerup', endDrag);
+                window.removeEventListener('pointercancel', endDrag);
+                window.removeEventListener('blur', endDrag);
+            }
+
+            stopComparisonDrag = endDrag;
+
+            if (typeof handle.addEventListener === 'function') {
+                handle.addEventListener('pointerdown', startDrag);
+                handle.addEventListener('mousedown', startDrag);
+                handle.addEventListener('touchstart', startDrag, { passive: false });
+                handle.addEventListener('keydown', (e) => {
+                    if (!isComparisonActive) return;
+                    const step = (e.key === 'PageUp' || e.key === 'PageDown') ? 20 : 5;
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'PageDown') {
+                        if (typeof e.preventDefault === 'function') e.preventDefault();
+                        setComparisonSplit(comparisonSplit - step);
+                    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+                        if (typeof e.preventDefault === 'function') e.preventDefault();
+                        setComparisonSplit(comparisonSplit + step);
+                    } else if (e.key === 'Home') {
+                        if (typeof e.preventDefault === 'function') e.preventDefault();
+                        setComparisonSplit(0);
+                    } else if (e.key === 'End') {
+                        if (typeof e.preventDefault === 'function') e.preventDefault();
+                        setComparisonSplit(100);
+                    } else if (e.key === 'Escape') {
+                        if (typeof e.preventDefault === 'function') e.preventDefault();
+                        exitComparisonView();
+                    }
+                });
+            }
+
+            if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+                window.addEventListener('keydown', (e) => {
+                    if (isComparisonActive && e && e.key === 'Escape') {
+                        exitComparisonView();
+                    }
+                });
+            }
+
+            if (typeof wrapper.addEventListener === 'function') {
+                wrapper.addEventListener('pointerdown', (e) => {
+                    if (e.target === handle || (handle.contains && handle.contains(e.target))) return;
+                    if (e.target && typeof e.target.closest === 'function' && e.target.closest('.btn-comparison-exit')) return;
+                    updateFromClientX(getClientX(e));
+                    startDrag(e);
+                });
+                wrapper.addEventListener('touchstart', (e) => {
+                    if (e.target === handle || (handle.contains && handle.contains(e.target))) return;
+                    if (e.target && typeof e.target.closest === 'function' && e.target.closest('.btn-comparison-exit')) return;
+                    updateFromClientX(getClientX(e));
+                    startDrag(e);
+                }, { passive: false });
+                wrapper.addEventListener('mousedown', (e) => {
+                    if (e.target === handle || (handle.contains && handle.contains(e.target))) return;
+                    if (e.target && typeof e.target.closest === 'function' && e.target.closest('.btn-comparison-exit')) return;
+                    updateFromClientX(getClientX(e));
+                    startDrag(e);
+                });
             }
         }
 
@@ -771,10 +1102,14 @@
             }
         }
 
-        // Initialize Prompt History on page load
+        // Initialize Prompt History and Comparison Drag on page load
         renderPromptHistory();
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', renderPromptHistory);
+        initComparisonDrag();
+        if (typeof document !== 'undefined' && document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                renderPromptHistory();
+                initComparisonDrag();
+            });
         }
     </script>
 </body>

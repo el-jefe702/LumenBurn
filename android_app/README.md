@@ -10,6 +10,7 @@ This directory contains the native Android application for **DepthForge**. Built
   * **Prompt History:** Automatically persists the last 10 successful prompts in `SharedPreferences` (`depthforge_prompt_history`), rendered as clickable items with clear history support.
   * **Aspect Ratio Selector:** Native selectable chips (`1:1`, `4:3`, `3:2`, `16:9`, `2:3`) for custom aspect ratios in both text prompt and photo upload modes.
   * **Depth Intensity Slider (F6):** Native `Slider` control (0–100%, default 70%) adjusting carve relief depth and contrast in both Text and Photo modes. Dynamically displays the live percentage indicator (`Depth Intensity: 70%`), disables during active processing via `!isBusy`, and propagates `depth_intensity` / `depthIntensity` via `ApiClient.generate` and `ApiClient.photoToDepth`.
+  * **Before/After Comparison View (F7):** Interactive split-screen comparison mode (`BeforeAfterComparisonView`) with a horizontal draggable vertical divider slider, Before (Orange) and After (Indigo) badges with dynamic alpha edge-fading, and close button. Seamlessly toggled via the "Compare" / "Normal" action button whenever a post-processing operation (Invert, Remove BG, Polish) completes, with native `BackHandler` integration allowing system back gestures/buttons to dismiss comparison mode cleanly.
   * **Invert Depth Map:** Direct action button to invert depth maps via `/api/invert`.
   * **Session Gallery (History Panel):** Horizontal scrollable thumbnail strip (`LazyRow`) showing all images generated and processed in the current session. Clicking any thumbnail restores that map to the preview with active post-processing controls. Includes Hide/Show toggle and Clear controls, guarded by `!isBusy` across all interactions.
   * **Post-Processing Pipeline (Real-Time SSE Streaming):** Real-time visual sequence demonstrating the bilateral filtering, inpainting, scaling, normalization, and export stages streaming live over Server-Sent Events (`/api/postprocess-stream`) with zero fake delay loops.
@@ -39,3 +40,4 @@ Let Gradle sync project dependencies, and build the `app` configuration.
 * **Core:** Kotlin & Jetpack Compose (Material 2 Theme)
 * **Networking & Parsing:** OkHttp3 & Gson (using coroutines for asynchronous calls)
 * **Status Updates:** WebSocket connections for Ruida job updates, with regular HTTP polling fallbacks.
+* **Testing:** JUnit unit tests (`ComparisonViewTest`, `SessionGalleryTest`, `PromptHistoryTest`, `AspectRatioTest`, `InvertTest`) covering core math, state managers, and contracts.
