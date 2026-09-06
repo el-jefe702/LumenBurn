@@ -20,7 +20,7 @@ object ApiClient {
     var baseUrl = "http://4.3.2.122:8000/"
 
     private fun apiUrl(path: String): String {
-        return baseUrl.removeSuffix("/") + path
+        return baseUrl.trim().removeSuffix("/") + path
     }
 
     // POST JSON, return parsed JSONObject
@@ -184,5 +184,55 @@ object ApiClient {
                 "depthIntensity" to depthIntensity.toString()
             )
         )
+    }
+
+    // Check server health via GET /api/health
+    suspend fun checkHealth(): JSONObject = withContext(Dispatchers.IO) {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+
+        try {
+            val request = Request.Builder()
+                .url(apiUrl("/api/health"))
+                .get()
+                .build()
+
+            val response = client.newCall(request).execute()
+            response.use { resp ->
+                val statusCode = resp.code
+                val isSuccess = resp.isSuccessful
+                val responseText = resp.body?.string() ?: "{}"
+                val json = try {
+                    JSONObject(responseText)
+                } catch (e: Exception) {
+                    JSONObject().apply {
+                        put("rawResponse", responseText)
+                        put("error", "Non-JSON response from server (HTTP $statusCode)")
+                    }
+                }
+                json.put("isHealthy", isSuccess && json.optString("status") == "ok")
+                json.put("statusCode", statusCode)
+                json
+            }
+        } catch (e: Exception) {
+            JSONObject().apply {
+                put("status", "error")
+                put("error", e.message ?: "Unknown error")
+                put("isHealthy", false)
+                put("statusCode", 0)
+            }
+        }
+    }
+
+    // Convenience method returning boolean
+    suspend fun isHealthy(): Boolean {
+        return try {
+            val res = checkHealth()
+            res.optBoolean("isHealthy", false)
+        } catch (e: Exception) {
+            false
+        }
     }
 }

@@ -25,6 +25,7 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 - **Depth Intensity Slider (F6)**: Adjust carve depth and relief contrast from 0 to 100% (default 70%). Modulates prompts dynamically: 0–30% produces gentle, shallow relief with subtle height transitions; 31–69% applies standard relief depth; 70–100% generates dramatic, maximum-depth carving with extreme black-to-white contrast. Includes full WCAG 2.1 AA accessibility (ARIA value indicators, title tooltips, keyboard focus states) and automatic panel synchronization.
 - **Side-by-Side Comparison View (F7)**: Interactive split-screen comparison mode showing "Before" and "After" depth maps side-by-side with a draggable vertical divider slider. Activates automatically or via the "⚖️ Compare" action button after any post-processing operation (Invert, Remove BG, Polish for CNC). Features high-contrast badges (Orange "Before", Indigo "After" with smooth edge fading), polygon clip-path rendering, unified PointerEvents drag (supporting mouse, multi-touch, and pen/stylus inputs with `touch-action: none`), complete keyboard slider accessibility (Left/Right/Home/End/PageUp/PageDown and `Escape` key dismissal), deadlock-free lifecycle teardown across view exits, window blur focus-loss protection, and a quick "✕ Close Comparison" / "👁️ Normal View" toggle.
 - **Automatic Generated File Cleanup (F8)**: Automated background maintenance routine executing on server startup and hourly intervals. Automatically scans `static/generated/` and purges depth maps older than `GENERATED_TTL_HOURS` (defaulting to 24 hours) while preserving fresh images within the TTL window. Handles missing directories, empty folders, locked files, and non-file system artifacts gracefully without crashing, logging execution summaries cleanly to stdout.
+- **Health Check Endpoint (F9)**: Production health check endpoint at `GET /api/health` returning HTTP 200 with dynamic `package.json` version resolution (BOM- and corruption-resilient), non-blocking TTL-cached Python and `processor.py` engine availability verification, process uptime, strict anti-caching HTTP headers (`Cache-Control: no-store, no-cache...`), and ISO timestamp. Supports `HEAD` and `OPTIONS` probes, returning `405 Method Not Allowed` with `Allow: GET, HEAD, OPTIONS` on disallowed methods. Fully integrated with Docker Compose container monitoring and Android `ApiClient.checkHealth()` / `isHealthy()` with malformed URL and non-JSON proxy error resilience.
 - **Background Removal**: Isolate subjects onto pure black backgrounds with `rembg`
 - **Lossless Export**: Export production-ready 16-bit PNG depth maps
 
@@ -47,6 +48,7 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 ┌──────────────────────────────────────────────────────────────────┐
 │  Express Server (server.js)  — Port 8000                         │
 │                                                                  │
+│  GET  /api/health              → Health status, version & Python │
 │  POST /api/generate            → Gemini + Imagen 4 (aspectRatio, depth_intensity) │
 │  POST /api/photo-to-depth      → Gemini Vision + Imagen 4 (depth_intensity)       │
 │  POST /api/invert              → spawns processor.py invert      │
@@ -115,6 +117,7 @@ node cleanup.js [dir] [ttlHours] # Run generated file cleanup manually via CLI (
 
 | Endpoint | Method | Body / Params | Response | Description |
 |---|---|---|---|---|
+| `/api/health` | GET, HEAD, OPTIONS | None | `{"status": "ok", "version": "2.0.0", "python": true, "uptime": 12.34, "timestamp": "..."}` | Returns service health status, dynamic package.json version, Python engine availability, uptime, and timestamp. Disallowed methods (POST, PUT, DELETE, PATCH) return 405 Method Not Allowed with Allow header. |
 | `/api/generate` | POST | `{"prompt": "...", "aspectRatio": "1:1", "depth_intensity": 70}` | `{"status": "success", "image_url": "/static/generated/xxx.png"}` | Generates depth map from text prompt. `aspectRatio` defaults to `1:1` (`1:1`, `4:3`, `3:2`, `16:9`, `2:3`). `depth_intensity` (0–100) defaults to `70`. |
 | `/api/photo-to-depth` | POST | Multipart `photo` file, optional `aspectRatio`, optional `depth_intensity` | `{"status": "success", "image_url": "...", "subject": "..."}` | Analyzes photo and generates depth map with requested aspect ratio and depth intensity (default 70). |
 | `/api/invert` | POST | `{"image_url": "..."}` | `{"status": "success", "image_url": "/static/generated/inv_xxx.png"}` | Inverts depth map pixel values (16-bit or 8-bit). |

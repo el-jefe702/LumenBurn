@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { GoogleGenAI } from '@google/genai';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 
@@ -142,6 +142,24 @@ const buildFinalPrompt = (improvedPrompt, depthIntensity = 70) => {
         "OUTPUT: A perfectly smooth, seamless 16-bit depth map optimized for 3D CNC laser engraving.";
 };
 
+// --- DYNAMIC PACKAGE METADATA ---
+const getPackageVersion = (customPkgPath = path.join(__dirname, 'package.json')) => {
+    try {
+        const pkgPath = (typeof customPkgPath === 'string' && customPkgPath.trim())
+            ? customPkgPath.trim()
+            : path.join(__dirname, 'package.json');
+        if (!fs.existsSync(pkgPath) || !fs.statSync(pkgPath).isFile()) {
+            return '0.0.0';
+        }
+        const pkgContent = fs.readFileSync(pkgPath, 'utf8');
+        const cleanContent = pkgContent.replace(/^\uFEFF/, '');
+        const pkg = JSON.parse(cleanContent);
+        return (typeof pkg.version === 'string' && pkg.version.trim()) ? pkg.version.trim() : '0.0.0';
+    } catch {
+        return '0.0.0';
+    }
+};
+
 // --- HELPER FOR PYTHON TASKS ---
 const resolvePythonExecutable = () => {
     if (process.env.PYTHON_EXEC) {
@@ -156,6 +174,51 @@ const resolvePythonExecutable = () => {
         if (candidate && fs.existsSync(candidate)) return candidate;
     }
     return process.platform === 'win32' ? 'python.exe' : 'python';
+};
+
+const _pyCheckCache = new Map();
+
+const clearPythonCache = () => {
+    _pyCheckCache.clear();
+};
+
+const isPythonAvailable = (customResolvePy = resolvePythonExecutable, customProcessorPath = path.join(__dirname, 'processor.py'), options = {}) => {
+    try {
+        if (!customProcessorPath || typeof customProcessorPath !== 'string' || !fs.existsSync(customProcessorPath) || !fs.statSync(customProcessorPath).isFile()) {
+            return false;
+        }
+        const pyExec = typeof customResolvePy === 'function' ? customResolvePy() : customResolvePy;
+        if (!pyExec || typeof pyExec !== 'string' || !pyExec.trim()) {
+            return false;
+        }
+        if (pyExec.includes('/') || pyExec.includes('\\')) {
+            if (!fs.existsSync(pyExec)) {
+                return false;
+            }
+        }
+
+        const bypassCache = options?.bypassCache === true;
+        const ttlMs = typeof options?.ttlMs === 'number' ? options.ttlMs : 30000;
+        const cacheKey = `${pyExec}::${customProcessorPath}`;
+        const now = Date.now();
+        if (!bypassCache) {
+            const cached = _pyCheckCache.get(cacheKey);
+            if (cached && (now - cached.timestamp < ttlMs)) {
+                return cached.result;
+            }
+        }
+
+        const check = spawnSync(pyExec, ['--version'], {
+            stdio: 'ignore',
+            timeout: 5000,
+            windowsHide: true
+        });
+        const result = !check.error && check.status === 0;
+        _pyCheckCache.set(cacheKey, { result, timestamp: Date.now() });
+        return result;
+    } catch {
+        return false;
+    }
 };
 
 const parseStepFromLog = (line) => {
@@ -210,6 +273,48 @@ const sanitizeAspectRatio = (ratio) => {
 };
 
 // --- ROUTES ---
+
+app.route('/api/health')
+    .get((req, res) => {
+        try {
+            const version = getPackageVersion();
+            const python = isPythonAvailable();
+            const uptime = typeof process.uptime === 'function' && Number.isFinite(process.uptime())
+                ? Math.max(0, Number(process.uptime().toFixed(2)))
+                : 0;
+            const timestamp = new Date().toISOString();
+
+            res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.set('Pragma', 'no-cache');
+            res.set('Expires', '0');
+
+            res.status(200).json({
+                status: 'ok',
+                version,
+                python,
+                uptime,
+                timestamp
+            });
+        } catch (err) {
+            res.status(500).json({
+                status: 'error',
+                error: err?.message || 'Internal health check error',
+                timestamp: new Date().toISOString()
+            });
+        }
+    })
+    .options((req, res) => {
+        res.set('Allow', 'GET, HEAD, OPTIONS');
+        res.status(204).end();
+    })
+    .all((req, res) => {
+        res.set('Allow', 'GET, HEAD, OPTIONS');
+        res.status(405).json({
+            status: 'error',
+            error: `Method ${req.method} not allowed`,
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS']
+        });
+    });
 
 app.post('/api/generate', async (req, res) => {
     console.log(`[${new Date().toLocaleTimeString()}] 🚀 POST /api/generate - Starting generation...`);
@@ -548,5 +653,9 @@ export {
     CLEANUP_INTERVAL_MS,
     cleanupScheduler,
     generatedDir,
-    isMainModule
+    isMainModule,
+    getPackageVersion,
+    resolvePythonExecutable,
+    isPythonAvailable,
+    clearPythonCache
 };

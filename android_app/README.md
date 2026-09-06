@@ -19,6 +19,7 @@ This directory contains the native Android application for **DepthForge**. Built
 * **Support AI:** Direct chat connection with the SLCreations studio assistant (via `/api/chat`), with unique local session persistence.
 * **Admin Dashboard:** Access to the Student Queue (with direct "Open in LightBurn" triggers) and Login Leads tracker.
 * **Dynamic Connection Settings:** Tap the **Settings (Gear)** icon in the top-right corner of any screen to quickly adjust the API Base URL.
+* **Health Check & Service Status:** Remote backend health verification via `ApiClient.checkHealth()` and `ApiClient.isHealthy()`, querying `GET /api/health` with automatic status parsing, dynamic semver reporting, Python engine validation, strict HTTP success checks, safe base URL trimming, and safe error handling that preserves HTTP status codes on non-JSON error pages and catches malformed URLs cleanly.
 
 ---
 
@@ -40,4 +41,4 @@ Let Gradle sync project dependencies, and build the `app` configuration.
 * **Core:** Kotlin & Jetpack Compose (Material 2 Theme)
 * **Networking & Parsing:** OkHttp3 & Gson (using coroutines for asynchronous calls)
 * **Status Updates:** WebSocket connections for Ruida job updates, with regular HTTP polling fallbacks.
-* **Testing:** JUnit unit tests (`ComparisonViewTest`, `SessionGalleryTest`, `PromptHistoryTest`, `AspectRatioTest`, `InvertTest`) covering core math, state managers, and contracts.
+* **Testing:** JUnit unit tests (`ComparisonViewTest`, `SessionGalleryTest`, `PromptHistoryTest`, `AspectRatioTest`, `InvertTest`, `HealthCheckTest`) covering core math, state managers, and contracts.
