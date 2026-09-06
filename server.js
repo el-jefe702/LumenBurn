@@ -10,6 +10,17 @@ import { fileURLToPath } from 'url';
 
 dotenv.config();
 
+import {
+    cleanupGeneratedFiles,
+    cleanupGeneratedFilesSync,
+    parseTtlHours,
+    startCleanupScheduler,
+    stopCleanupScheduler,
+    DEFAULT_TTL_HOURS,
+    CLEANUP_INTERVAL_MS,
+    isMainModule
+} from './cleanup.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -489,9 +500,29 @@ app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) =>
 });
 
 let server;
-const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+let cleanupScheduler = null;
+const isDirectRun = isMainModule(import.meta.url);
 if (process.env.NODE_ENV !== 'test' && isDirectRun) {
     server = app.listen(port, '0.0.0.0', () => console.log(`DepthForge running on http://0.0.0.0:${port}`));
+    cleanupScheduler = startCleanupScheduler({
+        dir: generatedDir,
+        runImmediately: true
+    });
+    if (server) {
+        server.on('close', () => {
+            if (cleanupScheduler) {
+                stopCleanupScheduler(cleanupScheduler);
+            }
+        });
+
+        const handleShutdown = () => {
+            server.close(() => {
+                process.exit(0);
+            });
+        };
+        process.on('SIGINT', handleShutdown);
+        process.on('SIGTERM', handleShutdown);
+    }
 }
 
 export {
@@ -507,5 +538,15 @@ export {
     buildFinalPrompt,
     buildImprovePrompt,
     sanitizeDepthIntensity,
-    getDepthModifier
+    getDepthModifier,
+    cleanupGeneratedFiles,
+    cleanupGeneratedFilesSync,
+    parseTtlHours,
+    startCleanupScheduler,
+    stopCleanupScheduler,
+    DEFAULT_TTL_HOURS,
+    CLEANUP_INTERVAL_MS,
+    cleanupScheduler,
+    generatedDir,
+    isMainModule
 };

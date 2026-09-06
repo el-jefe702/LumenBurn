@@ -24,6 +24,7 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 - **Session Gallery / History Panel (F5)**: Horizontal scrollable thumbnail strip below the preview area displaying all generated and post-processed versions in the session. Clicking any thumbnail restores that version to the active preview with all action buttons (Invert, Remove BG, Polish, Download) re-targeted to it. Includes Hide/Show and Clear controls, strict concurrency guards blocking race conditions during in-flight network requests, mobile viewport responsiveness down to <360px width, and native touch momentum scrolling.
 - **Depth Intensity Slider (F6)**: Adjust carve depth and relief contrast from 0 to 100% (default 70%). Modulates prompts dynamically: 0–30% produces gentle, shallow relief with subtle height transitions; 31–69% applies standard relief depth; 70–100% generates dramatic, maximum-depth carving with extreme black-to-white contrast. Includes full WCAG 2.1 AA accessibility (ARIA value indicators, title tooltips, keyboard focus states) and automatic panel synchronization.
 - **Side-by-Side Comparison View (F7)**: Interactive split-screen comparison mode showing "Before" and "After" depth maps side-by-side with a draggable vertical divider slider. Activates automatically or via the "⚖️ Compare" action button after any post-processing operation (Invert, Remove BG, Polish for CNC). Features high-contrast badges (Orange "Before", Indigo "After" with smooth edge fading), polygon clip-path rendering, unified PointerEvents drag (supporting mouse, multi-touch, and pen/stylus inputs with `touch-action: none`), complete keyboard slider accessibility (Left/Right/Home/End/PageUp/PageDown and `Escape` key dismissal), deadlock-free lifecycle teardown across view exits, window blur focus-loss protection, and a quick "✕ Close Comparison" / "👁️ Normal View" toggle.
+- **Automatic Generated File Cleanup (F8)**: Automated background maintenance routine executing on server startup and hourly intervals. Automatically scans `static/generated/` and purges depth maps older than `GENERATED_TTL_HOURS` (defaulting to 24 hours) while preserving fresh images within the TTL window. Handles missing directories, empty folders, locked files, and non-file system artifacts gracefully without crashing, logging execution summaries cleanly to stdout.
 - **Background Removal**: Isolate subjects onto pure black backgrounds with `rembg`
 - **Lossless Export**: Export production-ready 16-bit PNG depth maps
 
@@ -52,6 +53,7 @@ DepthForge generates flawless 16-bit 3D grayscale height maps optimized for CNC 
 │  GET  /api/postprocess-stream  → spawns processor.py smooth (SSE)│
 │  POST /api/remove_bg           → spawns processor.py remove_bg   │
 │  POST /api/lumenburn/convert   → SVG to LBRN2 XML conversion     │
+│  Scheduled Task (cleanup.js)   → Hourly TTL cleanup of generated/│
 └───────────────────────────────┬──────────────────────────────────┘
                                 │ child_process.spawn
                                 ▼
@@ -88,10 +90,12 @@ npm install
 # Install Python dependencies
 pip install opencv-python numpy rembg
 
-# Configure API key
+# Configure environment (.env)
 echo "GEMINI_API_KEY=your_key_here" > .env
+# Optional: customize generated file TTL in hours (default: 24)
+# echo "GENERATED_TTL_HOURS=24" >> .env
 
-# Start the server
+# Start the server (runs initial cleanup and schedules hourly maintenance)
 npm start
 ```
 
@@ -102,6 +106,7 @@ Open **http://localhost:8000** in your browser.
 ```bash
 npm run dev    # Hot-reload with --watch
 npm test       # Run automated unit & integration test suite
+node cleanup.js [dir] [ttlHours] # Run generated file cleanup manually via CLI (or --dir / --ttl flags)
 ```
 
 ---
