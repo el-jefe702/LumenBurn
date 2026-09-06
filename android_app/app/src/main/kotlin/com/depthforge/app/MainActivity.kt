@@ -428,9 +428,10 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                             promptHistory = emptyList()
                                         },
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                                        modifier = Modifier.height(28.dp)
+                                        modifier = Modifier.height(28.dp),
+                                        enabled = !isBusy
                                     ) {
-                                        Text("Clear history", color = PinkAccent, fontSize = 12.sp)
+                                        Text("Clear history", color = if (!isBusy) PinkAccent else TextSecondary, fontSize = 12.sp)
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -445,7 +446,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                                 .clip(RoundedCornerShape(6.dp))
                                                 .background(Color(0xFF0D0D15))
                                                 .border(1.dp, GrayBorder, RoundedCornerShape(6.dp))
-                                                .clickable {
+                                                .clickable(enabled = !isBusy) {
                                                     promptInput = histPrompt
                                                 }
                                                 .padding(horizontal = 10.dp, vertical = 8.dp)
@@ -477,7 +478,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
-                                if (promptInput.isNotBlank()) {
+                                if (promptInput.isNotBlank() && !isBusy) {
                                     isGenerating = true
                                     lastError = null
                                     currentImageUrl = ""
@@ -512,7 +513,8 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(backgroundColor = GoldAccent),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isBusy
                         ) {
                             Text("Ignite Forge")
                         }
@@ -521,7 +523,8 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = { photoPickerLauncher.launch("image/*") },
-                            colors = ButtonDefaults.buttonColors(backgroundColor = GrayBorder)
+                            colors = ButtonDefaults.buttonColors(backgroundColor = GrayBorder),
+                            enabled = !isBusy
                         ) {
                             Text("Select Photo", color = TextPrimary)
                         }
@@ -543,48 +546,50 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
-                                selectedPhotoUri?.let { uri ->
-                                    isGenerating = true
-                                    lastError = null
-                                    currentImageUrl = ""
-                                    currentBitmap = null
-                                    isPolished = false
-                                    bgRemoved = false
-                                    
-                                    coroutineScope.launch {
-                                        try {
-                                            val tempFile = File(context.cacheDir, "upload_temp.jpg")
-                                            context.contentResolver.openInputStream(uri)?.use { input ->
-                                                FileOutputStream(tempFile).use { output ->
-                                                    input.copyTo(output)
+                                if (!isBusy) {
+                                    selectedPhotoUri?.let { uri ->
+                                        isGenerating = true
+                                        lastError = null
+                                        currentImageUrl = ""
+                                        currentBitmap = null
+                                        isPolished = false
+                                        bgRemoved = false
+                                        
+                                        coroutineScope.launch {
+                                            try {
+                                                val tempFile = File(context.cacheDir, "upload_temp.jpg")
+                                                context.contentResolver.openInputStream(uri)?.use { input ->
+                                                    FileOutputStream(tempFile).use { output ->
+                                                        input.copyTo(output)
+                                                    }
                                                 }
+                                                val res = ApiClient.photoToDepth(tempFile, selectedAspectRatio, depthIntensity.toInt()) // ApiClient.photoToDepth(tempFile, selectedAspectRatio)
+                                                if (res.optString("status") == "success") {
+                                                    currentImageUrl = res.getString("image_url")
+                                                    currentBitmap = ApiClient.downloadImage(currentImageUrl)
+                                                    val (updatedGallery, newItem) = SessionGalleryManager.addItem(
+                                                        sessionGallery,
+                                                        currentImageUrl,
+                                                        currentBitmap,
+                                                        "Photo"
+                                                    )
+                                                    sessionGallery = updatedGallery
+                                                    activeGalleryItemId = newItem.id
+                                                } else {
+                                                    lastError = "Conversion failed"
+                                                }
+                                            } catch (e: Exception) {
+                                                lastError = e.message ?: "Error reading file"
+                                            } finally {
+                                                isGenerating = false
                                             }
-                                            val res = ApiClient.photoToDepth(tempFile, selectedAspectRatio, depthIntensity.toInt()) // ApiClient.photoToDepth(tempFile, selectedAspectRatio)
-                                            if (res.optString("status") == "success") {
-                                                currentImageUrl = res.getString("image_url")
-                                                currentBitmap = ApiClient.downloadImage(currentImageUrl)
-                                                val (updatedGallery, newItem) = SessionGalleryManager.addItem(
-                                                    sessionGallery,
-                                                    currentImageUrl,
-                                                    currentBitmap,
-                                                    "Photo"
-                                                )
-                                                sessionGallery = updatedGallery
-                                                activeGalleryItemId = newItem.id
-                                            } else {
-                                                lastError = "Conversion failed"
-                                            }
-                                        } catch (e: Exception) {
-                                            lastError = e.message ?: "Error reading file"
-                                        } finally {
-                                            isGenerating = false
                                         }
                                     }
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(backgroundColor = IndigoAccent),
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = selectedPhotoUri != null
+                            enabled = selectedPhotoUri != null && !isBusy
                         ) {
                             Text("Convert to Depth Map")
                         }
@@ -815,7 +820,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                 promptInput = ""
                             },
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                            enabled = !isInverting && !isRemovingBg
+                            enabled = !isBusy
                         ) {
                             Text("Discard")
                         }
@@ -849,7 +854,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(backgroundColor = OrangeAccent),
-                            enabled = !isInverting && !isRemovingBg
+                            enabled = !isBusy
                         ) {
                             Text(if (isInverting) "Inverting..." else "Invert")
                         }
@@ -882,7 +887,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(backgroundColor = PinkAccent),
-                                enabled = !isInverting && !isRemovingBg
+                                enabled = !isBusy
                             ) {
                                 Text(if (isRemovingBg) "Removing..." else "Remove BG")
                             }
@@ -932,7 +937,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                             },
                             colors = ButtonDefaults.buttonColors(backgroundColor = IndigoAccent),
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = !isInverting && !isRemovingBg
+                            enabled = !isBusy
                         ) {
                             Text("Polish for CNC")
                         }
@@ -956,7 +961,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                         },
                         colors = ButtonDefaults.buttonColors(backgroundColor = EmeraldAccent),
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isInverting && !isRemovingBg && !isPolishing
+                        enabled = !isBusy && currentBitmap != null
                     ) {
                         Text("Download")
                     }
