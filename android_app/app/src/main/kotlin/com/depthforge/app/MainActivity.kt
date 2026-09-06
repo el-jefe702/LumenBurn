@@ -19,6 +19,9 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
@@ -123,6 +126,44 @@ object PromptHistoryManager {
     }
 }
 
+data class SessionGalleryItem(
+    val id: String,
+    val imageUrl: String,
+    val bitmap: Bitmap? = null,
+    val label: String = "Image",
+    val timestamp: String = ""
+)
+
+object SessionGalleryManager {
+    fun addItem(
+        currentList: List<SessionGalleryItem>,
+        imageUrl: String,
+        bitmap: Bitmap? = null,
+        label: String = "Image",
+        timestamp: String? = null
+    ): Pair<List<SessionGalleryItem>, SessionGalleryItem> {
+        val time = timestamp ?: run {
+            val format = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+            format.format(java.util.Date())
+        }
+        val id = "gallery_${System.currentTimeMillis()}_${currentList.size}"
+        val item = SessionGalleryItem(
+            id = id,
+            imageUrl = imageUrl,
+            bitmap = bitmap,
+            label = label,
+            timestamp = time
+        )
+        return Pair(currentList + item, item)
+    }
+
+    fun clear(): List<SessionGalleryItem> = emptyList()
+
+    fun findItem(list: List<SessionGalleryItem>, id: String): SessionGalleryItem? {
+        return list.find { it.id == id }
+    }
+}
+
 @Composable
 fun ForgeApp(prefs: SharedPreferences) {
     var showSettings by remember { mutableStateOf(false) }
@@ -220,6 +261,30 @@ fun AspectRatioSelector(
 }
 
 @Composable
+fun DepthIntensitySlider(
+    intensity: Float,
+    onIntensityChange: (Float) -> Unit,
+    enabled: Boolean = true
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Depth Intensity: ${intensity.toInt()}%", color = TextSecondary, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(4.dp))
+        Slider(
+            value = intensity,
+            onValueChange = onIntensityChange,
+            valueRange = 0f..100f,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = GoldAccent,
+                activeTrackColor = GoldAccent,
+                inactiveTrackColor = GrayBorder
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
 fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val actualPrefs = prefs ?: context.getSharedPreferences("depthforge_prefs", Context.MODE_PRIVATE)
@@ -228,9 +293,14 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
     var promptInput by remember { mutableStateOf("") }
     var inputMode by remember { mutableStateOf("text") }
     var selectedAspectRatio by remember { mutableStateOf("1:1") }
+    var depthIntensity by remember { mutableStateOf(70f) }
     var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var currentImageUrl by remember { mutableStateOf("") }
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var sessionGallery by remember { mutableStateOf<List<SessionGalleryItem>>(emptyList()) }
+    var activeGalleryItemId by remember { mutableStateOf<String?>(null) }
+    var isGalleryVisible by remember { mutableStateOf(true) }
+    val galleryListState = rememberLazyListState()
     
     var isGenerating by remember { mutableStateOf(false) }
     var isPolishing by remember { mutableStateOf(false) }
@@ -241,8 +311,19 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
     var lastError by remember { mutableStateOf<String?>(null) }
     var activePolishStep by remember { mutableStateOf(-1) }
     
+    val isBusy = isGenerating || isPolishing || isInverting || isRemovingBg
+
     val coroutineScope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
+
+    LaunchedEffect(activeGalleryItemId) {
+        if (activeGalleryItemId != null) {
+            val index = sessionGallery.indexOfFirst { it.id == activeGalleryItemId }
+            if (index >= 0) {
+                galleryListState.animateScrollToItem(index)
+            }
+        }
+    }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedPhotoUri = uri
@@ -388,6 +469,12 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                             onRatioSelected = { selectedAspectRatio = it }
                         )
                         Spacer(modifier = Modifier.height(16.dp))
+                        DepthIntensitySlider(
+                            intensity = depthIntensity,
+                            onIntensityChange = { depthIntensity = it },
+                            enabled = !isBusy
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
                                 if (promptInput.isNotBlank()) {
@@ -400,11 +487,19 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                     
                                     coroutineScope.launch {
                                         try {
-                                            val res = ApiClient.generate(promptInput, selectedAspectRatio)
+                                            val res = ApiClient.generate(promptInput, selectedAspectRatio, depthIntensity.toInt()) // ApiClient.generate(promptInput, selectedAspectRatio)
                                             if (res.optString("status") == "success") {
                                                 currentImageUrl = res.getString("image_url")
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)
                                                 promptHistory = PromptHistoryManager.savePrompt(actualPrefs, promptInput)
+                                                val (updatedGallery, newItem) = SessionGalleryManager.addItem(
+                                                    sessionGallery,
+                                                    currentImageUrl,
+                                                    currentBitmap,
+                                                    "Generated"
+                                                )
+                                                sessionGallery = updatedGallery
+                                                activeGalleryItemId = newItem.id
                                             } else {
                                                 lastError = "Generation failed"
                                             }
@@ -440,6 +535,12 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                             onRatioSelected = { selectedAspectRatio = it }
                         )
                         Spacer(modifier = Modifier.height(16.dp))
+                        DepthIntensitySlider(
+                            intensity = depthIntensity,
+                            onIntensityChange = { depthIntensity = it },
+                            enabled = !isBusy
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
                                 selectedPhotoUri?.let { uri ->
@@ -458,10 +559,18 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                                     input.copyTo(output)
                                                 }
                                             }
-                                            val res = ApiClient.photoToDepth(tempFile, selectedAspectRatio)
+                                            val res = ApiClient.photoToDepth(tempFile, selectedAspectRatio, depthIntensity.toInt()) // ApiClient.photoToDepth(tempFile, selectedAspectRatio)
                                             if (res.optString("status") == "success") {
                                                 currentImageUrl = res.getString("image_url")
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)
+                                                val (updatedGallery, newItem) = SessionGalleryManager.addItem(
+                                                    sessionGallery,
+                                                    currentImageUrl,
+                                                    currentBitmap,
+                                                    "Photo"
+                                                )
+                                                sessionGallery = updatedGallery
+                                                activeGalleryItemId = newItem.id
                                             } else {
                                                 lastError = "Conversion failed"
                                             }
@@ -570,6 +679,125 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Session Gallery Strip (F5)
+            if (sessionGallery.isNotEmpty()) {
+                Card(
+                    backgroundColor = CardBackground,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, GrayBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Session Gallery (${sessionGallery.size})",
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    onClick = { isGalleryVisible = !isGalleryVisible },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                    enabled = !isBusy
+                                ) {
+                                    Text(if (isGalleryVisible) "Hide" else "Show", color = if (!isBusy) TextSecondary else TextSecondary.copy(alpha = 0.5f), fontSize = 12.sp)
+                                }
+                                TextButton(
+                                    onClick = {
+                                        sessionGallery = SessionGalleryManager.clear()
+                                        activeGalleryItemId = null
+                                        isGalleryVisible = true
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                    enabled = !isBusy
+                                ) {
+                                    Text("Clear", color = if (!isBusy) PinkAccent else TextSecondary, fontSize = 12.sp)
+                                }
+                            }
+                        }
+
+                        if (isGalleryVisible) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyRow(
+                                state = galleryListState,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(sessionGallery) { item ->
+                                    val isActive = item.id == activeGalleryItemId
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .width(84.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isActive) Color(0xFF1E1B2E) else Color(0xFF0D0D15))
+                                            .border(
+                                                width = if (isActive) 2.dp else 1.dp,
+                                                color = if (isActive) GoldAccent else GrayBorder,
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .clickable(enabled = !isBusy) {
+                                                activeGalleryItemId = item.id
+                                                currentImageUrl = item.imageUrl
+                                                currentBitmap = item.bitmap
+                                                isPolished = false
+                                                bgRemoved = false
+                                                if (item.bitmap == null && item.imageUrl.isNotBlank()) {
+                                                    coroutineScope.launch {
+                                                        currentBitmap = ApiClient.downloadImage(item.imageUrl)
+                                                    }
+                                                }
+                                            }
+                                            .padding(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(72.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color.Black),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (item.bitmap != null) {
+                                                Image(
+                                                    bitmap = item.bitmap.asImageBitmap(),
+                                                    contentDescription = item.label,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            } else {
+                                                Text("Map", color = TextSecondary, fontSize = 10.sp)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = item.label,
+                                            color = if (isActive) GoldAccent else TextPrimary,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = item.timestamp,
+                                            color = TextSecondary,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Action Buttons
             if (currentImageUrl.isNotBlank() && !isGenerating && !isPolishing) {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -581,6 +809,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                             onClick = {
                                 currentImageUrl = ""
                                 currentBitmap = null
+                                activeGalleryItemId = null
                                 isPolished = false
                                 bgRemoved = false
                                 promptInput = ""
@@ -601,6 +830,14 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                         if (res.optString("status") == "success") {
                                             currentImageUrl = res.getString("image_url")
                                             currentBitmap = ApiClient.downloadImage(currentImageUrl)
+                                            val (updatedGallery, newItem) = SessionGalleryManager.addItem(
+                                                sessionGallery,
+                                                currentImageUrl,
+                                                currentBitmap,
+                                                "Invert"
+                                            )
+                                            sessionGallery = updatedGallery
+                                            activeGalleryItemId = newItem.id
                                         } else {
                                             lastError = "Invert failed"
                                         }
@@ -628,6 +865,14 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                                 currentImageUrl = res.getString("image_url")
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)
                                                 bgRemoved = true
+                                                val (updatedGallery, newItem) = SessionGalleryManager.addItem(
+                                                    sessionGallery,
+                                                    currentImageUrl,
+                                                    currentBitmap,
+                                                    "Remove BG"
+                                                )
+                                                sessionGallery = updatedGallery
+                                                activeGalleryItemId = newItem.id
                                             }
                                         } catch (e: Exception) {
                                             lastError = "Remove BG failed"
@@ -663,6 +908,14 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                                                 currentImageUrl = newUrl
                                                 currentBitmap = ApiClient.downloadImage(currentImageUrl)
                                                 isPolished = true
+                                                val (updatedGallery, newItem) = SessionGalleryManager.addItem(
+                                                    sessionGallery,
+                                                    currentImageUrl,
+                                                    currentBitmap,
+                                                    "Polish"
+                                                )
+                                                sessionGallery = updatedGallery
+                                                activeGalleryItemId = newItem.id
                                             } else {
                                                 lastError = "Polish failed"
                                             }
@@ -683,27 +936,29 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                         ) {
                             Text("Polish for CNC")
                         }
-                    } else {
-                        Button(
-                            onClick = {
-                                currentBitmap?.let { bitmap ->
-                                    coroutineScope.launch {
-                                        try {
-                                            withContext(Dispatchers.IO) {
-                                                saveImageToGallery(context, bitmap, "DepthForge_${System.currentTimeMillis()}")
-                                            }
-                                            scaffoldState.snackbarHostState.showSnackbar("Saved!")
-                                        } catch (e: Exception) {
-                                            scaffoldState.snackbarHostState.showSnackbar("Failed to save")
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    Button(
+                        onClick = {
+                            currentBitmap?.let { bitmap ->
+                                coroutineScope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            saveImageToGallery(context, bitmap, "DepthForge_${System.currentTimeMillis()}")
                                         }
+                                        scaffoldState.snackbarHostState.showSnackbar("Saved!")
+                                    } catch (e: Exception) {
+                                        scaffoldState.snackbarHostState.showSnackbar("Failed to save")
                                     }
                                 }
-                            },
-                            colors = ButtonDefaults.buttonColors(backgroundColor = EmeraldAccent),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Download")
-                        }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(backgroundColor = EmeraldAccent),
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isInverting && !isRemovingBg && !isPolishing
+                    ) {
+                        Text("Download")
                     }
                 }
             }

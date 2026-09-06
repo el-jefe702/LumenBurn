@@ -51,7 +51,7 @@ cv2.imwrite(in_path, img)
                 assert.equal(createRes.status, 0, createRes.stderr);
 
                 // Run processor.py invert
-                const procRes = spawnSync(pythonExec, ['processor.py', 'invert', inPath, outPath], {
+                const procRes = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inPath, outPath], {
                     cwd: rootDir,
                     encoding: 'utf-8'
                 });
@@ -92,7 +92,7 @@ cv2.imwrite(in_path, img, [cv2.IMWRITE_PNG_COMPRESSION, 9])
                 assert.equal(createRes.status, 0, createRes.stderr);
 
                 // Run processor.py invert
-                const procRes = spawnSync(pythonExec, ['processor.py', 'invert', inPath, outPath], {
+                const procRes = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inPath, outPath], {
                     cwd: rootDir,
                     encoding: 'utf-8'
                 });
@@ -134,7 +134,7 @@ cv2.imwrite(sys.argv[1], img)
                 const createRes = spawnSync(pythonExec, ['-c', createScript, inPath], { encoding: 'utf-8' });
                 assert.equal(createRes.status, 0, createRes.stderr);
 
-                const procRes = spawnSync(pythonExec, ['processor.py', 'invert', inPath, outPath], {
+                const procRes = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inPath, outPath], {
                     cwd: rootDir,
                     encoding: 'utf-8'
                 });
@@ -180,7 +180,7 @@ cv2.imwrite(sys.argv[1], img)
                 const createRes = spawnSync(pythonExec, ['-c', createScript, inPath], { encoding: 'utf-8' });
                 assert.equal(createRes.status, 0, createRes.stderr);
 
-                const procRes = spawnSync(pythonExec, ['processor.py', 'invert', inPath, outPath], {
+                const procRes = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inPath, outPath], {
                     cwd: rootDir,
                     encoding: 'utf-8'
                 });
@@ -223,7 +223,7 @@ cv2.imwrite(sys.argv[1], img)
                 const createRes = spawnSync(pythonExec, ['-c', createScript, inPath], { encoding: 'utf-8' });
                 assert.equal(createRes.status, 0, createRes.stderr);
 
-                const procRes = spawnSync(pythonExec, ['processor.py', 'invert', inPath, outPath], {
+                const procRes = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inPath, outPath], {
                     cwd: rootDir,
                     encoding: 'utf-8'
                 });
@@ -265,7 +265,7 @@ cv2.imwrite(sys.argv[1], img)
                 const createRes = spawnSync(pythonExec, ['-c', createScript, inPath], { encoding: 'utf-8' });
                 assert.equal(createRes.status, 0, createRes.stderr);
 
-                const procRes = spawnSync(pythonExec, ['processor.py', 'invert', inPath, outPath], {
+                const procRes = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inPath, outPath], {
                     cwd: rootDir,
                     encoding: 'utf-8'
                 });
@@ -306,12 +306,12 @@ cv2.imwrite(sys.argv[1], img, [cv2.IMWRITE_PNG_COMPRESSION, 9])
                 assert.equal(createRes.status, 0, createRes.stderr);
 
                 // First invert
-                const res1 = spawnSync(pythonExec, ['processor.py', 'invert', inPath, inv1Path], { cwd: rootDir });
-                assert.equal(res1.status, 0);
+                const res1 = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inPath, inv1Path], { cwd: rootDir, encoding: 'utf-8' });
+                assert.equal(res1.status, 0, res1.stderr);
 
                 // Second invert
-                const res2 = spawnSync(pythonExec, ['processor.py', 'invert', inv1Path, inv2Path], { cwd: rootDir });
-                assert.equal(res2.status, 0);
+                const res2 = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inv1Path, inv2Path], { cwd: rootDir, encoding: 'utf-8' });
+                assert.equal(res2.status, 0, res2.stderr);
 
                 const verifyScript = `
 import cv2, numpy as np, sys
@@ -344,19 +344,19 @@ img = np.linspace(0, 65535, 100, dtype=np.uint16).reshape((10, 10))
 cv2.imwrite(sys.argv[1], img, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 `;
                 const createRes = spawnSync(pythonExec, ['-c', createScript, inPath], { encoding: 'utf-8' });
-                assert.equal(createRes.status, 0);
+                assert.equal(createRes.status, 0, createRes.stderr);
 
                 // Step 1: invert
-                const r1 = spawnSync(pythonExec, ['processor.py', 'invert', inPath, inv1Path], { cwd: rootDir });
-                assert.equal(r1.status, 0);
+                const r1 = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', inPath, inv1Path], { cwd: rootDir, encoding: 'utf-8' });
+                assert.equal(r1.status, 0, r1.stderr);
 
                 // Step 2: smooth (polish)
-                const r2 = spawnSync(pythonExec, ['processor.py', 'smooth', inv1Path, smoothPath], { cwd: rootDir });
-                assert.equal(r2.status, 0);
+                const r2 = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'smooth', inv1Path, smoothPath], { cwd: rootDir, encoding: 'utf-8' });
+                assert.equal(r2.status, 0, r2.stderr);
 
                 // Step 3: invert again
-                const r3 = spawnSync(pythonExec, ['processor.py', 'invert', smoothPath, inv2Path], { cwd: rootDir });
-                assert.equal(r3.status, 0);
+                const r3 = spawnSync(pythonExec, [path.join(rootDir, 'processor.py'), 'invert', smoothPath, inv2Path], { cwd: rootDir, encoding: 'utf-8' });
+                assert.equal(r3.status, 0, r3.stderr);
 
                 // Verify output is full 16-bit depth with high range
                 const verifyScript = `

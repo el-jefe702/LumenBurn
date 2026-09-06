@@ -1,8 +1,14 @@
-const { Vector2D } = require('./geometry');
+import { Vector2D } from './geometry.js';
 
-class Linearizer {
-    constructor(tolerance = 0.1) {
-        this.tolerance = tolerance;
+export class Linearizer {
+    constructor(toleranceOrPath = 0.1) {
+        if (typeof toleranceOrPath === 'string') {
+            this.tolerance = 0.1;
+            this.pathStr = toleranceOrPath;
+        } else {
+            this.tolerance = toleranceOrPath;
+            this.pathStr = '';
+        }
     }
 
     parseSVGPath(pathStr) {
@@ -35,7 +41,8 @@ class Linearizer {
     }
 
     linearize(pathStr) {
-        const commands = this.parseSVGPath(pathStr);
+        const str = pathStr || this.pathStr;
+        const commands = this.parseSVGPath(str);
         const vertices = [];
         let currentPoint = new Vector2D(0, 0);
         let subpathStart = new Vector2D(0, 0);
@@ -67,10 +74,15 @@ class Linearizer {
         }
         return vertices;
     }
+
+    process() {
+        const vertices = this.linearize(this.pathStr);
+        return { vertices, primitives: [] };
+    }
     
     generateLightBurnPrimitives(vertices) {
         return vertices.map((v, i) => `<V T="${i===0 ? 0 : 1}" X="${v.x}" Y="${v.y}"/>`);
     }
 }
 
-module.exports = { Linearizer };
+export default Linearizer;

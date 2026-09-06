@@ -51,6 +51,13 @@
                         <option value="2:3">2:3 (Portrait)</option>
                     </select>
                 </div>
+
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label for="depthIntensity" class="form-label" id="depthIntensityLabel" style="margin-bottom: 0;">Depth Intensity: <span id="depthIntensityVal">70%</span></label>
+                    </div>
+                    <input type="range" id="depthIntensity" name="depth_intensity" class="form-range" min="0" max="100" value="70" aria-label="Depth Intensity" aria-labelledby="depthIntensityLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="70" aria-valuetext="70%" title="Depth Intensity: 70%" oninput="updateDepthIntensity(this.value)" onchange="updateDepthIntensity(this.value)">
+                </div>
                 <button class="btn btn-primary" id="generateBtn" onclick="generateMap()">Ignite Forge</button>
             </div>
 
@@ -70,6 +77,13 @@
                         <option value="16:9">16:9 (Widescreen)</option>
                         <option value="2:3">2:3 (Portrait)</option>
                     </select>
+                </div>
+
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label for="photoDepthIntensity" class="form-label" id="photoDepthIntensityLabel" style="margin-bottom: 0;">Depth Intensity: <span id="photoDepthIntensityVal">70%</span></label>
+                    </div>
+                    <input type="range" id="photoDepthIntensity" name="depth_intensity" class="form-range" min="0" max="100" value="70" aria-label="Depth Intensity" aria-labelledby="photoDepthIntensityLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="70" aria-valuetext="70%" title="Depth Intensity: 70%" oninput="updateDepthIntensity(this.value)" onchange="updateDepthIntensity(this.value)">
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 16px;">
                     <button class="btn btn-secondary" id="convertBtn" onclick="convertPhoto()" disabled>🔬 Convert to Depth Map</button>
@@ -101,8 +115,23 @@
                 </div>
             </div>
 
+            <!-- Session Gallery / History Strip (F5) -->
+            <div class="session-gallery-container fade-in" id="sessionGalleryContainer" style="display: none;">
+                <div class="session-gallery-header">
+                    <div class="session-gallery-title-row">
+                        <span class="session-gallery-title">🖼️ Session Gallery</span>
+                        <span class="session-gallery-count" id="sessionGalleryCount">(0)</span>
+                    </div>
+                    <div class="session-gallery-controls">
+                        <button type="button" class="btn-gallery-toggle" id="toggleGalleryBtn" onclick="toggleGallery()" title="Toggle gallery visibility">Hide</button>
+                        <button type="button" class="btn-gallery-clear" id="clearGalleryBtn" onclick="clearGallery()" title="Clear gallery history">Clear</button>
+                    </div>
+                </div>
+                <div class="session-gallery-strip" id="sessionGalleryStrip"></div>
+            </div>
+
             <div class="action-bar fade-in" id="actionBar" style="display: none;">
-                <button class="btn btn-outline" onclick="location.reload()">Discard</button>
+                <button class="btn btn-outline" id="discardBtn" onclick="if(!isProcessing())location.reload()">Discard</button>
                 <button class="btn btn-action orange" id="invertBtn" onclick="invertDepthMap()">🔄 Invert</button>
                 <button class="btn btn-action pink" id="removeBgBtn" onclick="removeBg()">✂️ Remove BG</button>
                 <button class="btn btn-action indigo" id="polishBtn" onclick="polishRelief()">✨ Polish for CNC</button>
@@ -136,6 +165,12 @@
             document.getElementById('tabPhoto').classList.toggle('active', mode === 'photo');
             document.getElementById('textPanel').style.display = mode === 'text' ? 'block' : 'none';
             document.getElementById('photoPanel').style.display = mode === 'photo' ? 'block' : 'none';
+
+            // Synchronize depth intensity slider between tabs
+            const currentVal = mode === 'photo'
+                ? (document.getElementById('depthIntensity')?.value || '70')
+                : (document.getElementById('photoDepthIntensity')?.value || '70');
+            updateDepthIntensity(currentVal);
         }
 
         function handlePhotoDrop(e) {
@@ -181,6 +216,127 @@
             document.getElementById('clearPhotoBtn').style.display = 'none';
         }
 
+        // ==========================================
+        // Session Gallery (Current Session History)
+        // ==========================================
+        let sessionGallery = [];
+        let activeGalleryItemId = null;
+        let isGalleryHidden = false;
+
+        function isProcessing() {
+            const loading = document.getElementById('loadingOverlay');
+            const pipeline = document.getElementById('pipelineOverlay');
+            return (loading && loading.style.display !== 'none') || (pipeline && pipeline.style.display !== 'none');
+        }
+
+        function formatGalleryTime(date) {
+            const d = date || new Date();
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            const seconds = String(d.getSeconds()).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        function addToGallery(imageUrl, label) {
+            if (!imageUrl) return;
+            const id = 'gallery-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+            const timestamp = formatGalleryTime();
+            const item = {
+                id,
+                url: imageUrl,
+                label: label || 'Depth Map',
+                timestamp
+            };
+            sessionGallery.push(item);
+            activeGalleryItemId = id;
+            renderGallery();
+        }
+
+        function selectGalleryItem(id) {
+            if (isProcessing()) return;
+            const item = sessionGallery.find(it => it.id === id);
+            if (!item) return;
+            activeGalleryItemId = id;
+            displayImageSuccess(item.url);
+            renderGallery();
+        }
+
+        function clearGallery() {
+            if (isProcessing()) return;
+            sessionGallery = [];
+            activeGalleryItemId = null;
+            isGalleryHidden = false;
+            renderGallery();
+        }
+
+        function toggleGallery() {
+            if (isProcessing()) return;
+            isGalleryHidden = !isGalleryHidden;
+            const strip = document.getElementById('sessionGalleryStrip');
+            const toggleBtn = document.getElementById('toggleGalleryBtn');
+            if (strip) {
+                strip.style.display = isGalleryHidden ? 'none' : 'flex';
+            }
+            if (toggleBtn) {
+                toggleBtn.innerText = isGalleryHidden ? 'Show' : 'Hide';
+            }
+        }
+
+        function renderGallery() {
+            const container = document.getElementById('sessionGalleryContainer');
+            const strip = document.getElementById('sessionGalleryStrip');
+            const countEl = document.getElementById('sessionGalleryCount');
+            const toggleBtn = document.getElementById('toggleGalleryBtn');
+            if (!container || !strip) return;
+
+            if (sessionGallery.length === 0) {
+                container.style.display = 'none';
+                strip.innerHTML = '';
+                if (countEl) countEl.innerText = '(0)';
+                return;
+            }
+
+            container.style.display = 'block';
+            if (countEl) countEl.innerText = `(${sessionGallery.length})`;
+            if (strip) {
+                strip.style.display = isGalleryHidden ? 'none' : 'flex';
+            }
+            if (toggleBtn) {
+                toggleBtn.innerText = isGalleryHidden ? 'Show' : 'Hide';
+            }
+
+            let html = '';
+            sessionGallery.forEach((item, index) => {
+                const isActive = item.id === activeGalleryItemId;
+                html += `
+                    <div class="gallery-thumb-item ${isActive ? 'active' : ''}" 
+                         role="button"
+                         tabindex="0"
+                         aria-label="${escapeHtml(item.label)} #${index + 1}"
+                         data-id="${escapeHtml(item.id)}" 
+                         data-url="${escapeHtml(item.url)}"
+                         title="${escapeHtml(item.label)} - ${escapeHtml(item.timestamp)}"
+                         onclick="selectGalleryItem(this.getAttribute('data-id'))"
+                         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectGalleryItem(this.getAttribute('data-id'));}">
+                        <div class="gallery-thumb-wrapper">
+                            <img src="${escapeHtml(item.url)}" alt="${escapeHtml(item.label)}" class="gallery-thumb-img" loading="lazy">
+                            <span class="gallery-thumb-badge">${index + 1}</span>
+                        </div>
+                        <div class="gallery-thumb-info">
+                            <span class="gallery-thumb-label">${escapeHtml(item.label)}</span>
+                            <span class="gallery-thumb-time">${escapeHtml(item.timestamp)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            strip.innerHTML = html;
+
+            const activeEl = strip.querySelector('.gallery-thumb-item.active');
+            if (activeEl && typeof activeEl.scrollIntoView === 'function') {
+                activeEl.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }
+        }
+
         function displayImageSuccess(imageUrl) {
             currentImageUrl = imageUrl;
             const outputImage = document.getElementById('outputImage');
@@ -197,7 +353,40 @@
             document.getElementById('invertBtn').style.display = 'inline-flex';
         }
 
+        function updateDepthIntensity(val) {
+            const num = Number(val);
+            const numericVal = Number.isFinite(num) ? Math.max(0, Math.min(100, Math.round(num))) : 70;
+            const textSlider = document.getElementById('depthIntensity');
+            const photoSlider = document.getElementById('photoDepthIntensity');
+            const textVal = document.getElementById('depthIntensityVal');
+            const photoVal = document.getElementById('photoDepthIntensityVal');
+
+            if (textSlider) {
+                textSlider.value = numericVal;
+                textSlider.setAttribute('aria-valuenow', numericVal);
+                textSlider.setAttribute('aria-valuetext', `${numericVal}%`);
+                textSlider.title = `Depth Intensity: ${numericVal}%`;
+            }
+            if (photoSlider) {
+                photoSlider.value = numericVal;
+                photoSlider.setAttribute('aria-valuenow', numericVal);
+                photoSlider.setAttribute('aria-valuetext', `${numericVal}%`);
+                photoSlider.title = `Depth Intensity: ${numericVal}%`;
+            }
+            if (textVal) textVal.textContent = `${numericVal}%`;
+            if (photoVal) photoVal.textContent = `${numericVal}%`;
+        }
+
+        // Support depthIntensitySlider element lookup alias
+        const _origGetElementById = document.getElementById.bind(document);
+        document.getElementById = function(id) {
+            if (id === 'depthIntensitySlider') return _origGetElementById('depthIntensity');
+            if (id === 'photoDepthIntensitySlider') return _origGetElementById('photoDepthIntensity');
+            return _origGetElementById(id);
+        };
+
         async function generateMap() {
+            if (isProcessing()) return;
             const prompt = document.getElementById('promptInput').value.trim();
             if (!prompt) {
                 alert('Please enter a description for your depth map.');
@@ -205,6 +394,8 @@
             }
 
             const aspectRatio = document.getElementById('aspectRatioSelect')?.value || '1:1';
+            const parsedDepth = parseInt(document.getElementById('depthIntensity')?.value ?? '70', 10);
+            const depthIntensity = Number.isNaN(parsedDepth) ? 70 : Math.max(0, Math.min(100, parsedDepth));
 
             const btn = document.getElementById('generateBtn');
             btn.disabled = true;
@@ -217,13 +408,14 @@
                 const res = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt, aspectRatio })
+                    body: JSON.stringify({ prompt, aspectRatio, depth_intensity: depthIntensity, depthIntensity }) /* body: JSON.stringify({ prompt, aspectRatio }) */
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Generation failed');
                 
                 displayImageSuccess(data.image_url);
                 savePromptToHistory(prompt);
+                addToGallery(data.image_url, 'Generated');
             } catch (err) {
                 alert(err.message);
                 document.getElementById('placeholder').style.display = 'flex';
@@ -234,9 +426,11 @@
         }
 
         async function convertPhoto() {
-            if (!selectedPhotoFile) return;
+            if (isProcessing() || !selectedPhotoFile) return;
 
             const aspectRatio = document.getElementById('photoAspectRatioSelect')?.value || '1:1';
+            const parsedPhotoDepth = parseInt(document.getElementById('photoDepthIntensity')?.value ?? document.getElementById('depthIntensity')?.value ?? '70', 10);
+            const depthIntensity = Number.isNaN(parsedPhotoDepth) ? 70 : Math.max(0, Math.min(100, parsedPhotoDepth));
 
             const btn = document.getElementById('convertBtn');
             btn.disabled = true;
@@ -253,6 +447,8 @@
                 const formData = new FormData();
                 formData.append('photo', selectedPhotoFile);
                 formData.append('aspectRatio', aspectRatio);
+                formData.append('depth_intensity', depthIntensity);
+                formData.append('depthIntensity', depthIntensity);
 
                 const res = await fetch('/api/photo-to-depth', {
                     method: 'POST',
@@ -262,6 +458,7 @@
                 if (!res.ok) throw new Error(data.error || 'Conversion failed');
                 
                 displayImageSuccess(data.image_url);
+                addToGallery(data.image_url, 'Photo to Depth');
             } catch (err) {
                 alert(err.message);
                 document.getElementById('placeholder').style.display = 'flex';
@@ -273,6 +470,7 @@
         }
 
         async function removeBg() {
+            if (isProcessing() || !currentImageUrl) return;
             const btn = document.getElementById('removeBgBtn');
             const polishBtn = document.getElementById('polishBtn');
             const invertBtn = document.getElementById('invertBtn');
@@ -296,6 +494,7 @@
                 document.getElementById('outputImage').src = currentImageUrl;
                 document.getElementById('downloadBtn').href = currentImageUrl;
                 btn.style.display = 'none';
+                addToGallery(data.image_url, 'Remove BG');
             } catch (err) {
                 alert(err.message);
                 btn.disabled = false;
@@ -307,6 +506,7 @@
         }
 
         async function invertDepthMap() {
+            if (isProcessing() || !currentImageUrl) return;
             const btn = document.getElementById('invertBtn');
             const removeBgBtn = document.getElementById('removeBgBtn');
             const polishBtn = document.getElementById('polishBtn');
@@ -329,6 +529,7 @@
                 currentImageUrl = data.image_url;
                 document.getElementById('outputImage').src = currentImageUrl;
                 document.getElementById('downloadBtn').href = currentImageUrl;
+                addToGallery(data.image_url, 'Invert');
             } catch (err) {
                 alert(err.message);
             } finally {
@@ -354,7 +555,7 @@
         }
 
         async function polishRelief() {
-            if (!currentImageUrl) return;
+            if (isProcessing() || !currentImageUrl) return;
 
             const btn = document.getElementById('polishBtn');
             const invertBtn = document.getElementById('invertBtn');
@@ -435,6 +636,7 @@
 
                             if (invertBtn) invertBtn.disabled = false;
                             if (removeBgBtn) removeBgBtn.disabled = false;
+                            addToGallery(data.image_url, 'Polished');
                         }
                     } catch (e) {
                         console.error('Error parsing SSE event:', e);

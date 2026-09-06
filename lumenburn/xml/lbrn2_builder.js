@@ -1,9 +1,9 @@
 /**
  * LBRN2 XML Document Generator
  */
-const { CutSettings } = require('./cut_settings');
+import { CutSettings } from './cut_settings.js';
 
-function escapeXml(unsafe) {
+export function escapeXml(unsafe) {
     if (typeof unsafe !== 'string') return unsafe;
     return unsafe.replace(/[<>&'"]/g, function (c) {
         switch (c) {
@@ -16,10 +16,20 @@ function escapeXml(unsafe) {
     });
 }
 
-class Lbrn2Builder {
+export class Lbrn2Builder {
     constructor(cutSettings) {
         this.cutSettings = cutSettings || new CutSettings();
         this.shapes = [];
+    }
+
+    addShape(shape) {
+        this.shapes.push({
+            type: 'Path',
+            cutIndex: shape.cutIndex,
+            transform: shape.transform,
+            vertices: shape.vertices,
+            primitives: shape.primitives
+        });
     }
 
     addPath(cutIndex, transform, vertices, primitives) {
@@ -65,7 +75,7 @@ class Lbrn2Builder {
         return xml;
     }
 
-    build() {
+    build(cutSettings) {
         let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
         xml += '<LightBurnProject AppVersion="1.4.00" FormatVersion="1">\n';
         xml += this._buildCutSettingsXml();
@@ -75,7 +85,5 @@ class Lbrn2Builder {
     }
 }
 
-module.exports = {
-    Lbrn2Builder,
-    escapeXml
-};
+export const LBRN2Builder = Lbrn2Builder;
+export default Lbrn2Builder;

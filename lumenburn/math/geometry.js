@@ -1,4 +1,4 @@
-class Vector2D {
+export class Vector2D {
     constructor(x = 0, y = 0) {
         this.x = x;
         this.y = y;
@@ -12,7 +12,7 @@ class Vector2D {
     clone() { return new Vector2D(this.x, this.y); }
 }
 
-class Matrix2D {
+export class Matrix2D {
     constructor(a = 1, b = 0, c = 0, d = 1, tx = 0, ty = 0) {
         this.a = a; this.b = b; this.c = c; this.d = d; this.tx = tx; this.ty = ty;
     }
@@ -25,11 +25,11 @@ class Matrix2D {
     }
 }
 
-function pxToMm(px, ppi = 96) {
+export function pxToMm(px, ppi = 96) {
     return px * 25.4 / ppi;
 }
 
-function scaleViewBox(viewBoxStr, widthMm, heightMm) {
+export function scaleViewBox(viewBoxStr, widthMm, heightMm) {
     if (!viewBoxStr) return { scaleX: 1, scaleY: 1, tx: 0, ty: 0 };
     const parts = viewBoxStr.split(/[\s,]+/).map(Number);
     if (parts.length !== 4) return { scaleX: 1, scaleY: 1, tx: 0, ty: 0 };
@@ -42,4 +42,4 @@ function scaleViewBox(viewBoxStr, widthMm, heightMm) {
     };
 }
 
-module.exports = { Vector2D, Matrix2D, pxToMm, scaleViewBox };
+export default { Vector2D, Matrix2D, pxToMm, scaleViewBox };

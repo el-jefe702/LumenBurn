@@ -81,9 +81,16 @@ object ApiClient {
 
     // Generate depth map from text prompt with aspect ratio
     suspend fun generate(prompt: String, aspectRatio: String = "1:1"): JSONObject {
+        return generate(prompt, aspectRatio, 70)
+    }
+
+    // Generate depth map from text prompt with aspect ratio and depth intensity
+    suspend fun generate(prompt: String, aspectRatio: String, depthIntensity: Int = 70): JSONObject {
         val body = JSONObject().apply {
             put("prompt", prompt)
             put("aspectRatio", aspectRatio)
+            put("depth_intensity", depthIntensity)
+            put("depthIntensity", depthIntensity)
         }
         return postJson("/api/generate", body)
     }
@@ -162,6 +169,20 @@ object ApiClient {
 
     // Convert photo to depth map with aspect ratio
     suspend fun photoToDepth(file: File, aspectRatio: String = "1:1"): JSONObject {
-        return postMultipart("/api/photo-to-depth", file, "photo", mapOf("aspectRatio" to aspectRatio))
+        return photoToDepth(file, aspectRatio, 70) // mapOf("aspectRatio" to aspectRatio)
+    }
+
+    // Convert photo to depth map with aspect ratio and depth intensity
+    suspend fun photoToDepth(file: File, aspectRatio: String, depthIntensity: Int = 70): JSONObject {
+        return postMultipart(
+            "/api/photo-to-depth",
+            file,
+            "photo",
+            mapOf(
+                "aspectRatio" to aspectRatio,
+                "depth_intensity" to depthIntensity.toString(),
+                "depthIntensity" to depthIntensity.toString()
+            )
+        )
     }
 }

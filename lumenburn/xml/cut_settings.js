@@ -2,14 +2,14 @@
  * CutSettings layer for LumenBurn
  */
 
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
     speed: 100, // mm/sec
     power: 100, // %
     passes: 1,
     airAssist: true
 };
 
-class CutSettings {
+export class CutSettings {
     constructor() {
         this.cutSettings = new Map(); // Map from index to settings
         this.colorMap = new Map(); // Map from color (hex) to index
@@ -44,6 +44,10 @@ class CutSettings {
         return this._getColorIndex(color);
     }
 
+    getOrAssignIndex(color) {
+        return this._getColorIndex(color);
+    }
+
     getAllSettings() {
         return Array.from(this.cutSettings.entries()).map(([index, settings]) => ({
             index,
@@ -52,7 +56,5 @@ class CutSettings {
     }
 }
 
-module.exports = {
-    CutSettings,
-    DEFAULT_SETTINGS
-};
+export const CutSettingsManager = CutSettings;
+export default CutSettings;

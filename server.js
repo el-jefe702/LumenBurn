@@ -94,13 +94,42 @@ const buildImprovePrompt = (userIdea) =>
     "Do NOT include any mention of contours, layers, or topography. " +
     "Output in JSON format with key 'improved_prompt'.";
 
-const buildFinalPrompt = (improvedPrompt) => 
-    `A perfect, ultra-smooth 3D grayscale height map of ${improvedPrompt}. ` +
-    "CRITICAL: The subject must be ISOLATED on a PURE BLACK BACKGROUND (#000000). " +
-    "STYLE: Flawless, continuous gradients. Soft, airbrushed shading to represent height. " +
-    "TECHNICAL: Pure black to pure white linear Z-axis distribution. " +
-    "FORBIDDEN: ABSOLUTELY NO topographic lines, NO contour lines, NO terracing, NO stepped plateaus, NO harsh outlines, NO banding, NO posterization. " +
-    "OUTPUT: A perfectly smooth, seamless 16-bit depth map optimized for 3D CNC laser engraving.";
+const sanitizeDepthIntensity = (intensity) => {
+    if (typeof intensity !== 'number' && typeof intensity !== 'string') {
+        return 70;
+    }
+    if (typeof intensity === 'string' && intensity.trim() === '') {
+        return 70;
+    }
+    const num = Number(intensity);
+    if (!Number.isFinite(num)) {
+        return 70;
+    }
+    return Math.max(0, Math.min(100, Math.round(num)));
+};
+
+const getDepthModifier = (intensity) => {
+    const val = sanitizeDepthIntensity(intensity);
+    if (val <= 30) {
+        return "gentle, shallow relief with subtle height transitions";
+    }
+    if (val >= 70) {
+        return "dramatic, maximum-depth carving with extreme black-to-white contrast and deep relief";
+    }
+    return "";
+};
+
+const buildFinalPrompt = (improvedPrompt, depthIntensity = 70) => {
+    const modifier = getDepthModifier(depthIntensity);
+    const depthModifierClause = modifier ? `DEPTH INTENSITY: ${modifier}. ` : '';
+    return `A perfect, ultra-smooth 3D grayscale height map of ${improvedPrompt}. ` +
+        depthModifierClause +
+        "CRITICAL: The subject must be ISOLATED on a PURE BLACK BACKGROUND (#000000). " +
+        "STYLE: Flawless, continuous gradients. Soft, airbrushed shading to represent height. " +
+        "TECHNICAL: Pure black to pure white linear Z-axis distribution. " +
+        "FORBIDDEN: ABSOLUTELY NO topographic lines, NO contour lines, NO terracing, NO stepped plateaus, NO harsh outlines, NO banding, NO posterization. " +
+        "OUTPUT: A perfectly smooth, seamless 16-bit depth map optimized for 3D CNC laser engraving.";
+};
 
 // --- HELPER FOR PYTHON TASKS ---
 const resolvePythonExecutable = () => {
@@ -134,7 +163,7 @@ const parseStepFromLog = (line) => {
 
 const spawnPythonProcessor = (command, args) => {
     const pythonExec = resolvePythonExecutable();
-    return spawn(pythonExec, ['-u', 'processor.py', command, ...args]);
+    return spawn(pythonExec, ['-u', path.join(__dirname, 'processor.py'), command, ...args], { cwd: __dirname });
 };
 
 const runPythonProcessor = (command, args) => {
@@ -176,6 +205,7 @@ app.post('/api/generate', async (req, res) => {
     try {
         const studentPrompt = req.body.prompt || "";
         const aspectRatio = sanitizeAspectRatio(req.body.aspectRatio);
+        const depthIntensity = sanitizeDepthIntensity(req.body.depth_intensity ?? req.body.depthIntensity);
         
         const improveResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -183,7 +213,7 @@ app.post('/api/generate', async (req, res) => {
             config: { responseMimeType: "application/json" }
         });
         const responseJson = JSON.parse(improveResponse.text);
-        const finalPrompt = buildFinalPrompt(responseJson.improved_prompt || studentPrompt);
+        const finalPrompt = buildFinalPrompt(responseJson.improved_prompt || studentPrompt, depthIntensity);
         
         const imageResult = await ai.models.generateImages({
             model: 'imagen-4.0-fast-generate-001',
@@ -401,6 +431,7 @@ app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) =>
         if (!req.file) return res.status(400).json({ error: 'No photo uploaded.' });
 
         const aspectRatio = sanitizeAspectRatio(req.body.aspectRatio);
+        const depthIntensity = sanitizeDepthIntensity(req.body.depth_intensity ?? req.body.depthIntensity);
 
         const photoBytes = await fs.promises.readFile(uploadedPath);
         const photoBase64 = photoBytes.toString('base64');
@@ -423,7 +454,7 @@ app.post('/api/photo-to-depth', photoUpload.single('photo'), async (req, res) =>
 
         if (!depthPrompt) throw new Error('Gemini could not analyze depth structure.');
 
-        const finalDepthPrompt = buildFinalPrompt(depthPrompt);
+        const finalDepthPrompt = buildFinalPrompt(depthPrompt, depthIntensity);
 
         const imageResult = await ai.models.generateImages({
             model: 'imagen-4.0-fast-generate-001',
@@ -463,4 +494,18 @@ if (process.env.NODE_ENV !== 'test' && isDirectRun) {
     server = app.listen(port, '0.0.0.0', () => console.log(`DepthForge running on http://0.0.0.0:${port}`));
 }
 
-export { app, server, sanitizeAspectRatio, ALLOWED_ASPECT_RATIOS, ai, parseStepFromLog, runPythonProcessor, spawnPythonProcessor, handlePostprocessStream };
+export {
+    app,
+    server,
+    sanitizeAspectRatio,
+    ALLOWED_ASPECT_RATIOS,
+    ai,
+    parseStepFromLog,
+    runPythonProcessor,
+    spawnPythonProcessor,
+    handlePostprocessStream,
+    buildFinalPrompt,
+    buildImprovePrompt,
+    sanitizeDepthIntensity,
+    getDepthModifier
+};
