@@ -1,5 +1,6 @@
 package com.depthforge.app
 
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.content.SharedPreferences
@@ -9,6 +10,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import androidx.activity.ComponentActivity
@@ -45,7 +49,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -320,7 +326,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
     var isRemovingBg by remember { mutableStateOf(false) }
     var bgRemoved by remember { mutableStateOf(false) }
     var isInverting by remember { mutableStateOf(false) }
-    var show3DInfoDialog by remember { mutableStateOf(false) }
+    var show3DWebView by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
     var activePolishStep by remember { mutableStateOf(-1) }
     
@@ -927,9 +933,9 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                         }
 
                         Button(
-                            onClick = { show3DInfoDialog = true },
+                            onClick = { show3DWebView = true },
                             colors = ButtonDefaults.buttonColors(backgroundColor = PurpleAccent),
-                            enabled = !isBusy
+                            enabled = !isBusy && currentImageUrl != null
                         ) {
                             Text("🧊 3D Preview", color = TextPrimary)
                         }
@@ -1093,35 +1099,113 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
             }
         }
 
-        if (show3DInfoDialog) {
-            AlertDialog(
-                onDismissRequest = { show3DInfoDialog = false },
-                title = {
+        if (show3DWebView && currentImageUrl != null) {
+            BackHandler { show3DWebView = false }
+            Dialog(
+                onDismissRequest = { show3DWebView = false },
+                properties = DialogProperties(
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = false,
+                    usePlatformDefaultWidth = false
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.85f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(CardBackground)
+                ) {
+                    // Title bar
                     Text(
                         text = "🧊 3D Live Preview",
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Serif
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 16.sp,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 12.dp)
                     )
-                },
-                text = {
-                    Text(
-                        text = "Interactive 3D surface displacement mapping with real-time lighting and orbit/zoom controls is active in DepthForge Web UI. You can also preview it via the built-in mobile web view.",
-                        color = TextSecondary,
-                        fontSize = 14.sp
+
+                    // WebView with Three.js 3D displacement preview
+                    @SuppressLint("SetJavaScriptEnabled")
+                    val webViewRef = remember { mutableStateOf<WebView?>(null) }
+                    val imageUrl = currentImageUrl ?: ""
+
+                    AndroidView(
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.allowFileAccess = true
+                                settings.mediaPlaybackRequiresUserGesture = false
+                                settings.useWideViewPort = true
+                                settings.loadWithOverviewMode = true
+                                setBackgroundColor(android.graphics.Color.parseColor("#14141C"))
+
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        super.onPageFinished(view, url)
+                                        // Inject JS to set the current image and enter 3D preview
+                                        val escapedUrl = imageUrl.replace("'", "\\'")
+                                        val jsPayload = """
+                                            (function() {
+                                                if (typeof currentImageUrl !== 'undefined') {
+                                                    currentImageUrl = '$escapedUrl';
+                                                }
+                                                var img = document.getElementById('outputImage');
+                                                if (img) {
+                                                    img.src = '$escapedUrl';
+                                                    img.style.display = 'block';
+                                                }
+                                                if (typeof showOutput === 'function') {
+                                                    showOutput('$escapedUrl');
+                                                }
+                                                setTimeout(function() {
+                                                    if (typeof enter3DPreview === 'function') {
+                                                        enter3DPreview();
+                                                    }
+                                                }, 500);
+                                            })();
+                                        """.trimIndent()
+                                        view?.evaluateJavascript(jsPayload, null)
+                                    }
+
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView?,
+                                        request: WebResourceRequest?
+                                    ): Boolean {
+                                        // Keep navigation within the WebView for local assets
+                                        return false
+                                    }
+                                }
+
+                                webViewRef.value = this
+                                loadUrl("file:///android_asset/index.html")
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 44.dp, bottom = 56.dp)
                     )
-                },
-                confirmButton = {
+
+                    // Close button at bottom
                     Button(
-                        onClick = { show3DInfoDialog = false },
-                        colors = ButtonDefaults.buttonColors(backgroundColor = GoldAccent)
+                        onClick = {
+                            webViewRef.value?.destroy()
+                            show3DWebView = false
+                        },
+                        colors = ButtonDefaults.buttonColors(backgroundColor = GoldAccent),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 12.dp)
                     ) {
-                        Text("Got It", color = DarkBackground)
+                        Text("✕ Close 3D Preview", color = DarkBackground, fontWeight = FontWeight.Bold)
                     }
-                },
-                backgroundColor = CardBackground,
-                shape = RoundedCornerShape(12.dp)
-            )
+                }
+            }
         }
     }
 }

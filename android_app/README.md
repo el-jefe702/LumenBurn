@@ -21,6 +21,7 @@ This directory contains the native Android application for **DepthForge**. Built
 * **Dynamic Connection Settings:** Tap the **Settings (Gear)** icon in the top-right corner of any screen to quickly adjust the API Base URL.
 * **Health Check & Service Status:** Remote backend health verification via `ApiClient.checkHealth()` and `ApiClient.isHealthy()`, querying `GET /api/health` with automatic status parsing, dynamic semver reporting, Python engine validation, strict HTTP success checks, safe base URL trimming, and safe error handling that preserves HTTP status codes on non-JSON error pages and catches malformed URLs cleanly.
 * **Rate Limiting & 429 Error Handling (F10):** Robust error handling across text prompt generation and photo conversion. When backend returns HTTP 429 Too Many Requests (`ApiClient.isRateLimited()`), the exact error message (`"Too many requests. Please wait before generating again."`) is parsed from the error stream and displayed to the user via native Snackbar notifications and visible error state, preventing silent or generic failures.
+* **3D Live Preview (F11):** Interactive WebGL 3D displacement preview powered by Three.js, embedded via a fullscreen `WebView` dialog in Jetpack Compose. Loads the bundled `index.html` asset containing the complete Three.js displacement engine, automatically injects JavaScript to set the current depth map image and enter 3D preview mode on open. Features interactive orbit controls (drag to rotate), pinch/scroll zoom, directional lighting for relief shadow accentuation, camera reset, and a styled close button with `BackHandler` integration for clean dismissal. The `WebView` enables JavaScript, DOM storage, and file access for full WebGL rendering of the 256×256 vertex displacement mesh.
 
 ---
 
@@ -42,4 +43,4 @@ Let Gradle sync project dependencies, and build the `app` configuration.
 * **Core:** Kotlin & Jetpack Compose (Material 2 Theme)
 * **Networking & Parsing:** OkHttp3 & Gson (using coroutines for asynchronous calls)
 * **Status Updates:** WebSocket connections for Ruida job updates, with regular HTTP polling fallbacks.
-* **Testing:** JUnit unit tests (`ComparisonViewTest`, `SessionGalleryTest`, `PromptHistoryTest`, `AspectRatioTest`, `InvertTest`, `HealthCheckTest`, `RateLimitingTest`) covering core math, state managers, and contracts.
+* **Testing:** JUnit unit tests (`ComparisonViewTest`, `SessionGalleryTest`, `PromptHistoryTest`, `AspectRatioTest`, `InvertTest`, `HealthCheckTest`, `RateLimitingTest`, `ThreeDPreviewTest`) covering core math, state managers, WebView integration, and contracts.

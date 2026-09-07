@@ -267,20 +267,44 @@ describe('3D Live Preview (Three.js Displacement) (F11) - Unit & Integration Tes
             assert.ok(mainActivity.includes('val PurpleAccent = Color(0xFF8B5CF6)'));
         });
 
-        test('MainActivity.kt defines show3DInfoDialog state', () => {
-            assert.ok(mainActivity.includes('var show3DInfoDialog by remember { mutableStateOf(false) }'));
+        test('MainActivity.kt defines show3DWebView state for WebView dialog', () => {
+            assert.ok(mainActivity.includes('var show3DWebView by remember { mutableStateOf(false) }'));
         });
 
-        test('MainActivity.kt renders 3D Preview button in action row', () => {
+        test('MainActivity.kt renders 3D Preview button with WebView trigger', () => {
             assert.ok(mainActivity.includes('Text("🧊 3D Preview"'));
             assert.ok(mainActivity.includes('backgroundColor = PurpleAccent'));
-            assert.ok(mainActivity.includes('show3DInfoDialog = true'));
+            assert.ok(mainActivity.includes('show3DWebView = true'));
         });
 
-        test('MainActivity.kt displays AlertDialog explaining 3D displacement capabilities', () => {
-            assert.ok(mainActivity.includes('if (show3DInfoDialog)'));
-            assert.ok(mainActivity.includes('text = "🧊 3D Live Preview"'));
-            assert.ok(mainActivity.includes('Interactive 3D surface displacement mapping'));
+        test('MainActivity.kt embeds WebView with JavaScript and WebGL enabled', () => {
+            assert.ok(mainActivity.includes('AndroidView('));
+            assert.ok(mainActivity.includes('WebView(ctx)'));
+            assert.ok(mainActivity.includes('settings.javaScriptEnabled = true'));
+            assert.ok(mainActivity.includes('settings.domStorageEnabled = true'));
+        });
+
+        test('MainActivity.kt loads local Three.js assets in WebView', () => {
+            assert.ok(mainActivity.includes('loadUrl("file:///android_asset/index.html")'));
+        });
+
+        test('MainActivity.kt injects JavaScript to enter 3D preview with current image', () => {
+            assert.ok(mainActivity.includes('evaluateJavascript'));
+            assert.ok(mainActivity.includes('enter3DPreview'));
+            assert.ok(mainActivity.includes('showOutput'));
+            assert.ok(mainActivity.includes('currentImageUrl'));
+        });
+
+        test('MainActivity.kt provides BackHandler and close button for 3D WebView dialog', () => {
+            assert.ok(mainActivity.includes('BackHandler { show3DWebView = false }'));
+            assert.ok(mainActivity.includes('✕ Close 3D Preview'));
+            assert.ok(mainActivity.includes('webViewRef.value?.destroy()'));
+        });
+
+        test('MainActivity.kt uses fullscreen DialogProperties for immersive 3D experience', () => {
+            assert.ok(mainActivity.includes('usePlatformDefaultWidth = false'));
+            assert.ok(mainActivity.includes('dismissOnBackPress = true'));
+            assert.ok(mainActivity.includes('fillMaxHeight'));
         });
     });
 });
