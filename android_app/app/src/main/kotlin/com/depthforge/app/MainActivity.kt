@@ -65,6 +65,7 @@ val EmeraldAccent = Color(0xFF10B981)
 val PinkAccent = Color(0xFFEC4899)
 val OrangeAccent = Color(0xFFFF6B35)
 val CyanAccent = Color(0xFF0891B2)
+val PurpleAccent = Color(0xFF8B5CF6)
 val GrayBorder = Color(0xFF2A2A3A)
 
 @Composable
@@ -319,6 +320,7 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
     var isRemovingBg by remember { mutableStateOf(false) }
     var bgRemoved by remember { mutableStateOf(false) }
     var isInverting by remember { mutableStateOf(false) }
+    var show3DInfoDialog by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
     var activePolishStep by remember { mutableStateOf(-1) }
     
@@ -925,6 +927,14 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                         }
 
                         Button(
+                            onClick = { show3DInfoDialog = true },
+                            colors = ButtonDefaults.buttonColors(backgroundColor = PurpleAccent),
+                            enabled = !isBusy
+                        ) {
+                            Text("🧊 3D Preview", color = TextPrimary)
+                        }
+
+                        Button(
                             onClick = {
                                 isInverting = true
                                 lastError = null
@@ -1081,6 +1091,37 @@ fun ForgeScreen(prefs: SharedPreferences? = null, onOpenSettings: () -> Unit) {
                     }
                 }
             }
+        }
+
+        if (show3DInfoDialog) {
+            AlertDialog(
+                onDismissRequest = { show3DInfoDialog = false },
+                title = {
+                    Text(
+                        text = "🧊 3D Live Preview",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Interactive 3D surface displacement mapping with real-time lighting and orbit/zoom controls is active in DepthForge Web UI. You can also preview it via the built-in mobile web view.",
+                        color = TextSecondary,
+                        fontSize = 14.sp
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { show3DInfoDialog = false },
+                        colors = ButtonDefaults.buttonColors(backgroundColor = GoldAccent)
+                    ) {
+                        Text("Got It", color = DarkBackground)
+                    }
+                },
+                backgroundColor = CardBackground,
+                shape = RoundedCornerShape(12.dp)
+            )
         }
     }
 }

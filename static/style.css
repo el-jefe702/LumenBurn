@@ -987,3 +987,99 @@ textarea:focus, input[type=text]:focus {
   box-shadow: 0 0 16px rgba(6, 182, 212, 0.6);
 }
 
+/* ==========================================
+   3D Live Preview (Three.js Displacement) (F11)
+   ========================================== */
+.three-d-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9;
+  overflow: hidden;
+  user-select: none;
+}
+
+.three-d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  outline: none;
+}
+
+.three-d-canvas:active {
+  cursor: grabbing;
+}
+
+.three-d-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.btn-three-d-reset,
+.btn-three-d-exit {
+  position: absolute;
+  z-index: 12;
+  background: rgba(17, 17, 24, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.btn-three-d-reset {
+  top: 14px;
+  right: 14px;
+}
+
+.btn-three-d-exit {
+  bottom: 14px;
+  right: 14px;
+}
+
+.btn-three-d-reset:hover,
+.btn-three-d-exit:hover {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  background: rgba(26, 26, 38, 0.95);
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.25);
+}
+
+.btn-action.purple {
+  background-color: #7c3aed;
+}
+
+.btn-action.purple:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
+}
+
+.btn-action.purple.active {
+  background-color: #8b5cf6;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.6);
+}
+

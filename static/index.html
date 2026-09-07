@@ -7,6 +7,7 @@
     <meta name="description" content="Generate flawless 16-bit 3D relief depth maps for CNC laser engraving. AI-powered depth map creation and post-processing.">
     <link rel="icon" type="image/png" href="/static/favicon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
     <header class="app-header">
@@ -101,6 +102,14 @@
                 
                 <img id="outputImage" class="output-image" alt="Depth Map" style="display: none;">
                 
+                <!-- 3D Live Preview Viewport (F11) -->
+                <div class="three-d-container" id="threeDContainer" style="display: none;">
+                    <canvas id="threeDCanvas" class="three-d-canvas" tabindex="0" role="region" aria-label="3D Depth Map Surface"></canvas>
+                    <div class="three-d-hint" id="threeDHint">🖱️ Drag to rotate • Scroll to zoom</div>
+                    <button type="button" class="btn-three-d-reset" id="reset3DCameraBtn" onclick="reset3DCamera()" title="Reset 3D camera view">↺ Reset View</button>
+                    <button type="button" class="btn-three-d-exit" id="exit3DBtn" onclick="exit3DPreview()" title="Return to 2D view">✕ Close 3D</button>
+                </div>
+                
                 <!-- Side-by-Side / Split Comparison View (F7) -->
                 <div class="comparison-container" id="comparisonContainer" style="display: none;">
                     <div class="comparison-wrapper" id="comparisonWrapper">
@@ -157,6 +166,7 @@
 
             <div class="action-bar fade-in" id="actionBar" style="display: none;">
                 <button class="btn btn-outline" id="discardBtn" onclick="if(!isProcessing())location.reload()">Discard</button>
+                <button class="btn btn-action purple" id="threeDPreviewBtn" onclick="toggle3DPreview()" style="display: none;" title="Toggle 3D Displacement Preview">🧊 3D Preview</button>
                 <button class="btn btn-action cyan" id="compareBtn" onclick="toggleComparisonView()" style="display: none;">⚖️ Compare</button>
                 <button class="btn btn-action orange" id="invertBtn" onclick="invertDepthMap()">🔄 Invert</button>
                 <button class="btn btn-action pink" id="removeBgBtn" onclick="removeBg()">✂️ Remove BG</button>
@@ -396,6 +406,9 @@
             const outputImage = document.getElementById('outputImage');
             outputImage.src = imageUrl;
             outputImage.style.display = 'block';
+            if (typeof is3DActive !== 'undefined' && is3DActive) {
+                outputImage.style.display = 'none';
+            }
             document.getElementById('placeholder').style.display = 'none';
             document.getElementById('actionBar').style.display = 'flex';
             document.getElementById('downloadBtn').href = imageUrl;
@@ -405,6 +418,19 @@
             document.getElementById('removeBgBtn').style.display = 'inline-flex';
             document.getElementById('polishBtn').style.display = 'inline-flex';
             document.getElementById('invertBtn').style.display = 'inline-flex';
+
+            const threeDBtn = document.getElementById('threeDPreviewBtn');
+            if (threeDBtn) {
+                threeDBtn.style.display = 'inline-flex';
+                threeDBtn.disabled = false;
+                threeDBtn.innerText = (typeof is3DActive !== 'undefined' && is3DActive) ? '🖼️ 2D View' : '🧊 3D Preview';
+                if (threeDBtn.classList && typeof threeDBtn.classList.toggle === 'function') {
+                    threeDBtn.classList.toggle('active', typeof is3DActive !== 'undefined' && is3DActive);
+                }
+            }
+            if (typeof is3DActive !== 'undefined' && is3DActive && typeof update3DTexture === 'function') {
+                update3DTexture(imageUrl);
+            }
         }
 
         function updateDepthIntensity(val) {
@@ -429,6 +455,10 @@
             }
             if (textVal) textVal.textContent = `${numericVal}%`;
             if (photoVal) photoVal.textContent = `${numericVal}%`;
+
+            if (typeof update3DDisplacementScale === 'function') {
+                update3DDisplacementScale(numericVal);
+            }
         }
 
         // Support depthIntensitySlider element lookup alias
@@ -449,6 +479,9 @@
 
             if (isComparisonActive) {
                 exitComparisonView();
+            }
+            if (typeof is3DActive !== 'undefined' && is3DActive && typeof exit3DPreview === 'function') {
+                exit3DPreview();
             }
             comparisonBeforeUrl = '';
             comparisonAfterUrl = '';
@@ -500,6 +533,9 @@
 
             if (isComparisonActive) {
                 exitComparisonView();
+            }
+            if (typeof is3DActive !== 'undefined' && is3DActive && typeof exit3DPreview === 'function') {
+                exit3DPreview();
             }
             comparisonBeforeUrl = '';
             comparisonAfterUrl = '';
@@ -817,6 +853,9 @@
         function enterComparisonView() {
             if (isProcessing()) return;
             if (!comparisonBeforeUrl || !comparisonAfterUrl) return;
+            if (typeof is3DActive !== 'undefined' && is3DActive && typeof exit3DPreview === 'function') {
+                exit3DPreview();
+            }
 
             isComparisonActive = true;
             const compContainer = document.getElementById('comparisonContainer');
@@ -1005,6 +1044,285 @@
                     updateFromClientX(getClientX(e));
                     startDrag(e);
                 });
+            }
+        }
+
+        // ==========================================
+        // 3D Live Preview (Three.js Displacement) (F11)
+        // ==========================================
+        let is3DActive = false;
+        let threeDScene = null;
+        let threeDCamera = null;
+        let threeDRenderer = null;
+        let threeDMesh = null;
+        let threeDAnimId = null;
+        let threeDCurrentTexture = null;
+
+        let threeDRotationX = 0.55;
+        let threeDRotationY = 0.0;
+        let threeDZoom = 2.4;
+        let isThreeDDragging = false;
+        let threeDPreviousMouse = { x: 0, y: 0 };
+        let isThreeDListenersBound = false;
+
+        function getDepthDisplacementScale() {
+            const parsedDepth = parseInt(document.getElementById('depthIntensity')?.value ?? document.getElementById('photoDepthIntensity')?.value ?? '70', 10);
+            const intensity = Number.isNaN(parsedDepth) ? 70 : Math.max(0, Math.min(100, parsedDepth));
+            return (intensity / 100) * 0.45;
+        }
+
+        function initThreeD() {
+            if (typeof THREE === 'undefined') {
+                console.warn('Three.js is not loaded.');
+                return false;
+            }
+            const canvas = document.getElementById('threeDCanvas');
+            const container = document.getElementById('threeDContainer');
+            if (!canvas || !container) return false;
+
+            const width = container.clientWidth || 500;
+            const height = container.clientHeight || 450;
+
+            if (!threeDRenderer) {
+                try {
+                    threeDRenderer = new THREE.WebGLRenderer({
+                        canvas: canvas,
+                        antialias: true,
+                        alpha: true,
+                        powerPreference: 'high-performance'
+                    });
+                    threeDRenderer.setSize(width, height);
+                    threeDRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+                    threeDScene = new THREE.Scene();
+                    threeDCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+
+                    // Ambient + Directional lighting to accentuate 3D relief displacement
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+                    threeDScene.add(ambientLight);
+
+                    const dirLight = new THREE.DirectionalLight(0xfffaed, 0.9);
+                    dirLight.position.set(2.5, 4.0, 3.5);
+                    threeDScene.add(dirLight);
+
+                    const fillLight = new THREE.DirectionalLight(0x6366f1, 0.3);
+                    fillLight.position.set(-2.5, -2.0, 2.0);
+                    threeDScene.add(fillLight);
+                } catch (e) {
+                    console.error('Failed to initialize WebGLRenderer:', e);
+                    return false;
+                }
+            } else {
+                threeDRenderer.setSize(width, height);
+                if (threeDCamera) {
+                    threeDCamera.aspect = width / height;
+                    threeDCamera.updateProjectionMatrix();
+                }
+            }
+
+            bindThreeDControls(canvas);
+            return true;
+        }
+
+        function bindThreeDControls(canvas) {
+            if (isThreeDListenersBound || !canvas) return;
+            isThreeDListenersBound = true;
+
+            function onPointerDown(e) {
+                isThreeDDragging = true;
+                const clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+                const clientY = (e.touches && e.touches.length > 0) ? e.touches[0].clientY : e.clientY;
+                threeDPreviousMouse = { x: clientX, y: clientY };
+                if (canvas.setPointerCapture && e.pointerId !== undefined) {
+                    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+                }
+            }
+
+            function onPointerMove(e) {
+                if (!isThreeDDragging) return;
+                const clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+                const clientY = (e.touches && e.touches.length > 0) ? e.touches[0].clientY : e.clientY;
+                const deltaX = clientX - threeDPreviousMouse.x;
+                const deltaY = clientY - threeDPreviousMouse.y;
+                threeDPreviousMouse = { x: clientX, y: clientY };
+
+                threeDRotationY += deltaX * 0.01;
+                threeDRotationX += deltaY * 0.01;
+                threeDRotationX = Math.max(-Math.PI * 0.45, Math.min(Math.PI * 0.45, threeDRotationX));
+            }
+
+            function onPointerUp(e) {
+                isThreeDDragging = false;
+                if (canvas.releasePointerCapture && e.pointerId !== undefined) {
+                    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+                }
+            }
+
+            function onWheel(e) {
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+                const delta = (e.deltaY || 0) * 0.0025;
+                threeDZoom = Math.max(0.8, Math.min(6.5, threeDZoom + delta));
+            }
+
+            canvas.addEventListener('mousedown', onPointerDown);
+            window.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup', onPointerUp);
+
+            canvas.addEventListener('touchstart', onPointerDown, { passive: true });
+            window.addEventListener('touchmove', onPointerMove, { passive: true });
+            window.addEventListener('touchend', onPointerUp, { passive: true });
+
+            canvas.addEventListener('wheel', onWheel, { passive: false });
+
+            window.addEventListener('resize', () => {
+                if (is3DActive && threeDRenderer && threeDCamera) {
+                    const container = document.getElementById('threeDContainer');
+                    if (container) {
+                        const w = container.clientWidth || 500;
+                        const h = container.clientHeight || 450;
+                        threeDRenderer.setSize(w, h);
+                        threeDCamera.aspect = w / h;
+                        threeDCamera.updateProjectionMatrix();
+                    }
+                }
+            });
+        }
+
+        function loadThreeDTexture(imageUrl) {
+            if (!threeDScene || typeof THREE === 'undefined') return;
+            const loader = new THREE.TextureLoader();
+            loader.load(
+                imageUrl,
+                (texture) => {
+                    threeDCurrentTexture = texture;
+                    texture.generateMipmaps = true;
+                    texture.minFilter = THREE.LinearMipmapLinearFilter;
+
+                    const scale = getDepthDisplacementScale();
+                    if (!threeDMesh) {
+                        const geometry = new THREE.PlaneGeometry(1.6, 1.6, 256, 256);
+                        const material = new THREE.MeshStandardMaterial({
+                            map: texture,
+                            displacementMap: texture,
+                            displacementScale: scale,
+                            roughness: 0.45,
+                            metalness: 0.15,
+                            side: THREE.DoubleSide
+                        });
+                        threeDMesh = new THREE.Mesh(geometry, material);
+                        threeDScene.add(threeDMesh);
+                    } else {
+                        threeDMesh.material.map = texture;
+                        threeDMesh.material.displacementMap = texture;
+                        threeDMesh.material.displacementScale = scale;
+                        threeDMesh.material.needsUpdate = true;
+                    }
+                },
+                undefined,
+                (err) => {
+                    console.warn('Failed to load 3D texture:', err);
+                }
+            );
+        }
+
+        function renderThreeD() {
+            if (!is3DActive) return;
+            if (threeDCamera && threeDRenderer && threeDScene) {
+                threeDCamera.position.x = threeDZoom * Math.sin(threeDRotationY) * Math.cos(threeDRotationX);
+                threeDCamera.position.y = threeDZoom * Math.sin(threeDRotationX);
+                threeDCamera.position.z = threeDZoom * Math.cos(threeDRotationY) * Math.cos(threeDRotationX);
+                threeDCamera.lookAt(0, 0, 0);
+
+                threeDRenderer.render(threeDScene, threeDCamera);
+            }
+            threeDAnimId = requestAnimationFrame(renderThreeD);
+        }
+
+        function enter3DPreview() {
+            if (isProcessing() || !currentImageUrl) return;
+            if (isComparisonActive && typeof exitComparisonView === 'function') {
+                exitComparisonView();
+            }
+
+            const container = document.getElementById('threeDContainer');
+            const outputImage = document.getElementById('outputImage');
+            const btn = document.getElementById('threeDPreviewBtn');
+            if (!container) return;
+
+            is3DActive = true;
+            container.style.display = 'flex';
+            if (outputImage) outputImage.style.display = 'none';
+
+            if (btn) {
+                btn.innerText = '🖼️ 2D View';
+                if (btn.classList && typeof btn.classList.add === 'function') {
+                    btn.classList.add('active');
+                }
+            }
+
+            const ready = initThreeD();
+            if (ready) {
+                loadThreeDTexture(currentImageUrl);
+                if (threeDAnimId) cancelAnimationFrame(threeDAnimId);
+                renderThreeD();
+            }
+        }
+
+        function exit3DPreview() {
+            if (!is3DActive) return;
+            is3DActive = false;
+
+            const container = document.getElementById('threeDContainer');
+            const outputImage = document.getElementById('outputImage');
+            const btn = document.getElementById('threeDPreviewBtn');
+
+            if (container) container.style.display = 'none';
+            if (outputImage && currentImageUrl && !isComparisonActive) {
+                outputImage.style.display = 'block';
+            }
+
+            if (btn) {
+                btn.innerText = '🧊 3D Preview';
+                if (btn.classList && typeof btn.classList.remove === 'function') {
+                    btn.classList.remove('active');
+                }
+            }
+
+            if (threeDAnimId) {
+                cancelAnimationFrame(threeDAnimId);
+                threeDAnimId = null;
+            }
+        }
+
+        function toggle3DPreview() {
+            if (isProcessing()) return;
+            if (is3DActive) {
+                exit3DPreview();
+            } else {
+                enter3DPreview();
+            }
+        }
+
+        function reset3DCamera() {
+            threeDRotationX = 0.55;
+            threeDRotationY = 0.0;
+            threeDZoom = 2.4;
+        }
+
+        function update3DTexture(imageUrl) {
+            if (!imageUrl) return;
+            if (is3DActive) {
+                loadThreeDTexture(imageUrl);
+            }
+        }
+
+        function update3DDisplacementScale(intensityVal) {
+            const numericVal = Number(intensityVal);
+            const val = Number.isFinite(numericVal) ? numericVal : 70;
+            const scale = (val / 100) * 0.45;
+            if (threeDMesh && threeDMesh.material) {
+                threeDMesh.material.displacementScale = scale;
+                threeDMesh.material.needsUpdate = true;
             }
         }
 
